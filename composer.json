@@ -10,7 +10,7 @@
         "componenta/app-http": "^1.0",
         "componenta/class-finder": "^1.0",
         "componenta/config": "^1.0",
-        "componenta/di": "^1.0",
+        "componenta/di": "^2.0",
         "componenta/http-responder": "^1.0",
         "componenta/interceptor": "^1.0",
         "componenta/middleware-factory": "^1.0",
@@ -37,5 +37,17 @@
                 "Componenta\\Http\\Router\\App\\ConfigProvider"
             ]
         }
-    }
+    },
+    "require-dev": {
+        "pestphp/pest": "^4.0"
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "scripts": {
+        "test": "@php vendor/bin/pest"
+    },
+    "prefer-stable": true
 }

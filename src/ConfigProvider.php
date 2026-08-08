@@ -32,15 +32,6 @@ final class ConfigProvider extends BaseConfigProvider
         ];
     }
 
-    protected function getAutowires(): array
-    {
-        return [
-            RoutingBootloader::class,
-            RouteCacheCompiler::class,
-            RouterListCommand::class,
-        ];
-    }
-
     protected function getConfig(): array
     {
         return [

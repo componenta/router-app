@@ -105,7 +105,7 @@ final class RouterAppBootTarget implements HttpBootTargetInterface
 }
 
 describe('router app ConfigProvider', function () {
-    it('registers the route cache compiler as an autowired listener compiler', function () {
+    it('registers the route cache compiler without a legacy autowire section', function () {
         $config = (new ConfigProvider())();
 
         expect($config[ClassFinderConfigKey::LISTENERS])->toBe([
@@ -119,11 +119,8 @@ describe('router app ConfigProvider', function () {
         ])->and($config[ConsoleConfigKey::COMMANDS])->toBe([
             RouterListCommand::class,
         ])->and($config[RouterConfigKey::ROUTES_FILE])->toBe('config/routes.php')
-            ->and($config[DependencyConfigKey::DEPENDENCIES][DependencyConfigKey::AUTOWIRES])->toBe([
-            RoutingBootloader::class,
-            RouteCacheCompiler::class,
-            RouterListCommand::class,
-        ])->and($config[DependencyConfigKey::DEPENDENCIES][DependencyConfigKey::FACTORIES])
+            ->and($config[DependencyConfigKey::DEPENDENCIES])->not->toHaveKey(DependencyConfigKey::AUTOWIRES)
+            ->and($config[DependencyConfigKey::DEPENDENCIES][DependencyConfigKey::FACTORIES])
             ->toBe([
                 AttributeRouteLocator::class => AttributeRouteLocatorFactory::class,
                 RouteLocatorInterface::class => RouteLocatorFactory::class,
