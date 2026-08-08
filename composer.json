@@ -9,7 +9,7 @@
         "componenta/app-console": "^1.0.2",
         "componenta/app-http": "^1.0",
         "componenta/class-finder": "^1.0",
-        "componenta/config": "^1.0",
+        "componenta/config": "^2.0",
         "componenta/di": "^2.0.1",
         "componenta/http-responder": "^1.0",
         "componenta/interceptor": "^1.0",

@@ -154,6 +154,8 @@ The base `RouteLocatorFactory` uses cache only when `ConfigKey::COMPILED_PIPELIN
 - compiles the current route collection through `RouteCacheGenerator`;
 - returns `CompileResult::filesOnly()` so the cache builder can write the PHP cache file.
 
+When no routes were collected, the sidecar still acts as the compiled-empty marker but contains exactly `return [];`. Default keys such as `version`, `staticRoutes`, and `routeData` are omitted instead of being written with empty values. A non-empty cache keeps only the sections required by `CompiledRoutes`.
+
 Configuration example:
 
 ```php

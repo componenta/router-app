@@ -25,7 +25,7 @@ use RuntimeException;
  * (see {@see RouteLocatorFactory::cacheFileFor()}).
  *
  * CLI-gated: the generated file is a deploy artifact consumed by prod.
- * `discovery:compile` (CLI) runs with `APP_ENV=development` to scan
+ * `app:build` (CLI) runs with `APP_ENV=development` to scan
  * attributes, so an `APP_ENV` check can't distinguish that legitimate
  * write from an incidental dev-HTTP invocation. `PHP_SAPI` can -
  * compilation only happens off the command line. Dev HTTP invocations
@@ -54,7 +54,7 @@ final readonly class RouteCacheCompiler implements ListenerCompilerInterface
         /** @var AttributeRouteLocator $listener */
         $routesFile = $this->config->get(ConfigKey::ROUTES_FILE, default: null);
 
-        if ($routesFile === null) {
+        if (!is_string($routesFile) || trim($routesFile) === '') {
             throw new RuntimeException(sprintf(
                 'Cannot compile routes: config key %s is not set.',
                 ConfigKey::ROUTES_FILE,
@@ -65,9 +65,16 @@ final readonly class RouteCacheCompiler implements ListenerCompilerInterface
         // otherwise fall back to the legacy derived-path convention.
         $resolvedRoutesFile = $this->paths?->resolve($routesFile) ?? $routesFile;
         $cacheFile = $this->config->get(ConfigKey::ROUTES_CACHE_FILE, default: null);
-        $cacheFile = is_string($cacheFile)
-            ? ($this->paths?->resolve($cacheFile) ?? $cacheFile)
-            : RouteLocatorFactory::cacheFileFor($resolvedRoutesFile);
+        if ($cacheFile !== null && (!is_string($cacheFile) || trim($cacheFile) === '')) {
+            throw new RuntimeException(sprintf(
+                'Cannot compile routes: config key %s must be a non-empty string.',
+                ConfigKey::ROUTES_CACHE_FILE,
+            ));
+        }
+
+        $cacheFile = $cacheFile === null
+            ? RouteLocatorFactory::cacheFileFor($resolvedRoutesFile)
+            : ($this->paths?->resolve($cacheFile) ?? $cacheFile);
         $compiled  = $this->generator->compile($listener->getRoutes());
 
         return CompileResult::filesOnly([

@@ -119,7 +119,7 @@ describe('router app ConfigProvider', function () {
         ])->and($config[ConsoleConfigKey::COMMANDS])->toBe([
             RouterListCommand::class,
         ])->and($config[RouterConfigKey::ROUTES_FILE])->toBe('config/routes.php')
-            ->and($config[DependencyConfigKey::DEPENDENCIES])->not->toHaveKey(DependencyConfigKey::AUTOWIRES)
+            ->and($config[DependencyConfigKey::DEPENDENCIES])->not->toHaveKey('autowires')
             ->and($config[DependencyConfigKey::DEPENDENCIES][DependencyConfigKey::FACTORIES])
             ->toBe([
                 AttributeRouteLocator::class => AttributeRouteLocatorFactory::class,

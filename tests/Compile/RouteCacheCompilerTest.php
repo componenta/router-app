@@ -57,6 +57,35 @@ describe('RouteCacheCompiler', function () {
             ->and($cache['routeData']['home']['handler'])->toBe('HomeController');
     });
 
+    it('writes an empty route cache without default sections', function () {
+        $routesFile = tempnam(sys_get_temp_dir(), 'routes-empty-');
+        expect($routesFile)->toBeString();
+
+        $compiler = new RouteCacheCompiler(new Config([
+            ConfigKey::ROUTES_FILE => $routesFile,
+            ConfigKey::ROUTES_CACHE_FILE => 'var/cache/build/routes.cache.php',
+        ]));
+        $result = $compiler->compile(
+            routerAppAttributeLocator($routesFile),
+            sys_get_temp_dir(),
+        );
+
+        @unlink($routesFile);
+
+        $cacheFile = tempnam(sys_get_temp_dir(), 'routes-empty-cache-');
+        expect($cacheFile)->toBeString();
+
+        file_put_contents(
+            $cacheFile,
+            $result->files['var/cache/build/routes.cache.php'],
+        );
+        $cache = require $cacheFile;
+        @unlink($cacheFile);
+
+        expect($cache)->toBe([])
+            ->and(array_keys($cache))->toBe([]);
+    });
+
     it('resolves the explicit cache file through the path resolver', function () {
         $baseDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'componenta-route-cache-test';
         $routesFile = 'config/routes.php';
