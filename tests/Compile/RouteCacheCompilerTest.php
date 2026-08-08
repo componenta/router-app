@@ -53,6 +53,7 @@ describe('RouteCacheCompiler', function () {
         expect($result->configKey)->toBeNull()
             ->and($result->files)->toHaveKey('var/cache/build/routes.cache.php')
             ->and($cache['routeData']['home']['path'])->toBe('/')
+            ->and(array_keys($cache))->toBe(['version', 'staticRoutes', 'routeData'])
             ->and($cache['routeData']['home']['handler'])->toBe('HomeController');
     });
 
