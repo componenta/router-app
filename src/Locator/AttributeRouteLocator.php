@@ -17,15 +17,21 @@ use Componenta\Http\Router\Exception\RouteAlreadyExistsException;
 use Componenta\Http\Router\Locator\RouteLocator;
 use Componenta\Http\Router\RouteRecord;
 use Componenta\Http\Router\Routes;
+use Componenta\DI\Compile\Autowire\AutowireEntry;
+use Componenta\DI\Compile\Autowire\AutowireEntryContributorInterface;
+use Componenta\DI\Resolver\Entry\EntryClassEligibility;
+use Componenta\DI\Resolver\TypeHints;
 use Componenta\Reflection\Reflection;
 use Componenta\Tokenizer\ClassInfo;
+use ReflectionClass;
+use ReflectionMethod;
 
 /**
  * Attribute-based route locator
  */
 #[DevOnly]
 #[ListenTo(Route::class, deepSearch: true)]
-final class AttributeRouteLocator implements RouteLocatorInterface, ClassListenerInterface, FinalizableListenerInterface, FinalizationStateInterface
+final class AttributeRouteLocator implements RouteLocatorInterface, ClassListenerInterface, FinalizableListenerInterface, FinalizationStateInterface, AutowireEntryContributorInterface
 {
     private ?Routes $routes = null;
     private bool $isFinalized = false;
@@ -61,6 +67,43 @@ final class AttributeRouteLocator implements RouteLocatorInterface, ClassListene
             foreach ($result as $target => $attributes) {
                 $this->attributes[] = [$target, $attributes[0]];
             }
+        }
+    }
+
+    public function entries(): iterable
+    {
+        $classes = [];
+
+        foreach ($this->attributes as [$target]) {
+            [$class, $method] = array_pad(explode('::', $target, 2), 2, null);
+            if (!class_exists($class)) {
+                continue;
+            }
+
+            $reflection = new ReflectionClass($class);
+            if (EntryClassEligibility::allows($reflection)) {
+                $classes[$reflection->getName()] = true;
+            }
+
+            if ($method === null || !$reflection->hasMethod($method)) {
+                continue;
+            }
+
+            $action = new ReflectionMethod($class, $method);
+            foreach ($action->getParameters() as $parameter) {
+                $dependency = TypeHints::classOf($parameter->getType(), $parameter->getDeclaringClass());
+                if ($dependency !== null && class_exists($dependency)) {
+                    $candidate = new ReflectionClass($dependency);
+                    if (EntryClassEligibility::allows($candidate)) {
+                        $classes[$candidate->getName()] = true;
+                    }
+                }
+            }
+        }
+
+        ksort($classes);
+        foreach (array_keys($classes) as $class) {
+            yield new AutowireEntry($class, 'route discovery');
         }
     }
 

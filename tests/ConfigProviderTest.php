@@ -110,6 +110,8 @@ describe('router app ConfigProvider', function () {
 
         expect($config[ClassFinderConfigKey::LISTENERS])->toBe([
             AttributeRouteLocator::class,
+        ])->and($config[AppConfigKey::AUTOWIRE_ENTRY_CONTRIBUTORS])->toBe([
+            AttributeRouteLocator::class,
         ])->and($config[AppConfigKey::BOOTLOADERS])->toBe([
             RoutingBootloader::class,
         ])->and($config[CompileConfigKey::LISTENER_COMPILERS])->toBe([

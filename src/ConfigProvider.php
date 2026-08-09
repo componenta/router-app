@@ -41,6 +41,9 @@ final class ConfigProvider extends BaseConfigProvider
             ClassFinderConfigKey::LISTENERS => [
                 AttributeRouteLocator::class,
             ],
+            AppConfigKey::AUTOWIRE_ENTRY_CONTRIBUTORS => [
+                AttributeRouteLocator::class,
+            ],
             CompileConfigKey::LISTENER_COMPILERS => [
                 RouteCacheCompiler::class,
             ],
