@@ -32,6 +32,12 @@ it('contributes route controllers and concrete action parameters as factory root
             AttributeRouteActionInputForTest::class,
             AttributeRouteControllerForTest::class,
         ]);
+
+        $locator->finalize();
+        $routes = $locator->getRoutes();
+
+        expect($routes->match($routes, '/compiled-action', 'GET')->handler->value)
+            ->toBe(AttributeRouteControllerForTest::class . '::action');
     } finally {
         @unlink($routesFile);
     }

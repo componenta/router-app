@@ -65,9 +65,14 @@ final class AttributeRouteLocator implements RouteLocatorInterface, ClassListene
 
         if ($result !== []) {
             foreach ($result as $target => $attributes) {
-                $this->attributes[] = [$target, $attributes[0]];
+                $this->attributes[] = [self::normalizeTarget($target), $attributes[0]];
             }
         }
+    }
+
+    private static function normalizeTarget(string $target): string
+    {
+        return str_ends_with($target, '()') ? substr($target, 0, -2) : $target;
     }
 
     public function entries(): iterable
