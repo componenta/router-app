@@ -1,27 +1,22 @@
 <?php
-
 declare(strict_types=1);
-
 namespace Componenta\Http\Router\App\Factory;
-
-use Componenta\Config\Config;
+use Componenta\Config\ContainerValue;
 use Componenta\Http\Router\App\Locator\AttributeRouteLocator;
 use Componenta\Http\Router\ConfigKey;
+use Componenta\Http\Router\Contract\RouteLocatorInterface;
 use Componenta\Http\Router\Factory\RouteLocatorFactory as BaseRouteLocatorFactory;
-use Componenta\Http\Router\Locator\RouteLocator;
-use Psr\Container\ContainerInterface;
+use Componenta\Http\Router\Locator\CachedRouteLocator;
 
 final readonly class RouteLocatorFactory
 {
-    public function __invoke(ContainerInterface $container): RouteLocator|AttributeRouteLocator
+    public function __invoke(ContainerValue $container): RouteLocatorInterface
     {
-        /** @var Config $config */
-        $config = $container->get(ConfigKey::CONFIG);
-
-        if ($config->environment->match('APP_ENV', 'production')) {
-            return (new BaseRouteLocatorFactory())($container);
+        $source = static fn (): AttributeRouteLocator => $container->get(AttributeRouteLocator::class, AttributeRouteLocator::class);
+        if ($container->config->environment->match('APP_ENV', 'production')
+            && $container->config->bool(ConfigKey::COMPILED_PIPELINE, true)) {
+            return new CachedRouteLocator(BaseRouteLocatorFactory::cacheFile($container), $source);
         }
-
-        return $container->get(AttributeRouteLocator::class);
+        return $source();
     }
 }

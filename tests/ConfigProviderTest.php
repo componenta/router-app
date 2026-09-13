@@ -2,8 +2,6 @@
 
 declare(strict_types=1);
 
-use Componenta\ClassFinder\Compile\ConfigKey as CompileConfigKey;
-use Componenta\ClassFinder\ConfigKey as ClassFinderConfigKey;
 use Componenta\App\Console\ConfigKey as ConsoleConfigKey;
 use Componenta\App\ConfigKey as AppConfigKey;
 use Componenta\App\Boot\BootContext;
@@ -14,7 +12,8 @@ use Componenta\Config\ContainerValue;
 use Componenta\Config\ConfigKey as DependencyConfigKey;
 use Componenta\Http\Middleware\ConfigKey as MiddlewareConfigKey;
 use Componenta\Http\Router\App\Boot\RoutingBootloader;
-use Componenta\Http\Router\App\Compile\RouteCacheCompiler;
+use Componenta\Http\Router\App\Build\RouteBuilder;
+use Componenta\Http\Router\App\Build\RouteBuilderFactory;
 use Componenta\Http\Router\App\Console\RouterListCommand;
 use Componenta\Http\Router\App\ConfigProvider;
 use Componenta\Http\Router\App\Factory\AttributeRouteLocatorFactory;
@@ -105,18 +104,12 @@ final class RouterAppBootTarget implements HttpBootTargetInterface
 }
 
 describe('router app ConfigProvider', function () {
-    it('registers the route cache compiler without a legacy autowire section', function () {
+    it('registers the route builder and runtime factories', function () {
         $config = (new ConfigProvider())();
 
-        expect($config[ClassFinderConfigKey::LISTENERS])->toBe([
-            AttributeRouteLocator::class,
-        ])->and($config[AppConfigKey::AUTOWIRE_ENTRY_CONTRIBUTORS])->toBe([
-            AttributeRouteLocator::class,
-        ])->and($config[AppConfigKey::BOOTLOADERS])->toBe([
-            RoutingBootloader::class,
-        ])->and($config[CompileConfigKey::LISTENER_COMPILERS])->toBe([
-            RouteCacheCompiler::class,
-        ])->and($config[MiddlewareConfigKey::RESOLVERS])->toBe([
+        expect($config[AppConfigKey::BUILDERS])->toBe([RouteBuilder::class])
+            ->and($config[AppConfigKey::BOOTLOADERS])->toBe([RoutingBootloader::class])
+            ->and($config[MiddlewareConfigKey::RESOLVERS])->toBe([
             InterceptedRouteHandlerResolver::class,
         ])->and($config[ConsoleConfigKey::COMMANDS])->toBe([
             RouterListCommand::class,
@@ -124,6 +117,7 @@ describe('router app ConfigProvider', function () {
             ->and($config[DependencyConfigKey::DEPENDENCIES])->not->toHaveKey('autowires')
             ->and($config[DependencyConfigKey::DEPENDENCIES][DependencyConfigKey::FACTORIES])
             ->toBe([
+                RouteBuilder::class => RouteBuilderFactory::class,
                 AttributeRouteLocator::class => AttributeRouteLocatorFactory::class,
                 RouteLocatorInterface::class => RouteLocatorFactory::class,
                 InterceptedRouteHandlerResolver::class => InterceptedRouteHandlerResolverFactory::class,
@@ -144,7 +138,7 @@ describe('router app ConfigProvider', function () {
         $bootloader = new RoutingBootloader();
 
         $bootloader->boot(new BootContext(
-            new ContainerValue(new RouterAppFactoryTestContainer([]), new Config([])),
+            new ContainerValue(new RouterAppFactoryTestContainer([]), new Config([], new \Componenta\Config\Environment([]))),
             Scope::HTTP,
             $target,
         ));

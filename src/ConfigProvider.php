@@ -6,13 +6,12 @@ namespace Componenta\Http\Router\App;
 
 use Componenta\App\Console\ConfigKey as ConsoleConfigKey;
 use Componenta\App\ConfigKey as AppConfigKey;
-use Componenta\ClassFinder\ConfigKey as ClassFinderConfigKey;
-use Componenta\ClassFinder\Compile\ConfigKey as CompileConfigKey;
 use Componenta\Config\ConfigProvider as BaseConfigProvider;
 use Componenta\Http\Router\App\Console\RouterListCommand;
 use Componenta\Http\Middleware\ConfigKey as MiddlewareConfigKey;
 use Componenta\Http\Router\App\Boot\RoutingBootloader;
-use Componenta\Http\Router\App\Compile\RouteCacheCompiler;
+use Componenta\Http\Router\App\Build\RouteBuilder;
+use Componenta\Http\Router\App\Build\RouteBuilderFactory;
 use Componenta\Http\Router\App\Factory\AttributeRouteLocatorFactory;
 use Componenta\Http\Router\App\Factory\InterceptedRouteHandlerResolverFactory;
 use Componenta\Http\Router\App\Factory\RouteLocatorFactory;
@@ -26,6 +25,7 @@ final class ConfigProvider extends BaseConfigProvider
     protected function getFactories(): array
     {
         return [
+            RouteBuilder::class => RouteBuilderFactory::class,
             AttributeRouteLocator::class => AttributeRouteLocatorFactory::class,
             RouteLocatorInterface::class => RouteLocatorFactory::class,
             InterceptedRouteHandlerResolver::class => InterceptedRouteHandlerResolverFactory::class,
@@ -38,15 +38,7 @@ final class ConfigProvider extends BaseConfigProvider
             AppConfigKey::BOOTLOADERS => [
                 RoutingBootloader::class,
             ],
-            ClassFinderConfigKey::LISTENERS => [
-                AttributeRouteLocator::class,
-            ],
-            AppConfigKey::AUTOWIRE_ENTRY_CONTRIBUTORS => [
-                AttributeRouteLocator::class,
-            ],
-            CompileConfigKey::LISTENER_COMPILERS => [
-                RouteCacheCompiler::class,
-            ],
+            AppConfigKey::BUILDERS => [RouteBuilder::class],
             MiddlewareConfigKey::RESOLVERS => [
                 InterceptedRouteHandlerResolver::class,
             ],

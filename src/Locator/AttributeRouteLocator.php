@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Componenta\Http\Router\App\Locator;
 
-use Componenta\ClassFinder\Attribute\DevOnly;
 use Componenta\ClassFinder\Attribute\ListenTo;
 use Componenta\ClassFinder\ClassListenerInterface;
+use Componenta\ClassFinder\ClassIteratorInterface;
 use Componenta\ClassFinder\Exception\ListenerAlreadyFinalizedException;
 use Componenta\ClassFinder\FinalizableListenerInterface;
 use Componenta\ClassFinder\FinalizationStateInterface;
@@ -17,24 +17,25 @@ use Componenta\Http\Router\Exception\RouteAlreadyExistsException;
 use Componenta\Http\Router\Locator\RouteLocator;
 use Componenta\Http\Router\RouteRecord;
 use Componenta\Http\Router\Routes;
-use Componenta\DI\Compile\Autowire\AutowireEntry;
-use Componenta\DI\Compile\Autowire\AutowireEntryContributorInterface;
-use Componenta\DI\Resolver\Entry\EntryClassEligibility;
-use Componenta\DI\Resolver\TypeHints;
 use Componenta\Reflection\Reflection;
 use Componenta\Tokenizer\ClassInfo;
-use ReflectionClass;
-use ReflectionMethod;
 
 /**
  * Attribute-based route locator
  */
-#[DevOnly]
 #[ListenTo(Route::class, deepSearch: true)]
-final class AttributeRouteLocator implements RouteLocatorInterface, ClassListenerInterface, FinalizableListenerInterface, FinalizationStateInterface, AutowireEntryContributorInterface
+final class AttributeRouteLocator implements RouteLocatorInterface, ClassListenerInterface, FinalizableListenerInterface, FinalizationStateInterface
 {
     private ?Routes $routes = null;
     private bool $isFinalized = false;
+
+    public function canOptimize(): bool
+    {
+        foreach ($this->attributes as [, $route]) {
+            if ($route::class !== Route::class) { return false; }
+        }
+        return true;
+    }
 
     public bool $finalized {
         get => $this->isFinalized;
@@ -46,12 +47,19 @@ final class AttributeRouteLocator implements RouteLocatorInterface, ClassListene
     private array $attributes = [];
 
     public function __construct(
-        private readonly RouteLocator $locator
+        private readonly RouteLocator $locator,
+        private readonly ?ClassIteratorInterface $source = null,
     ) {
     }
 
     public function getRoutes(array $context = []): RouteCollectorInterface
     {
+        if (!$this->isFinalized && $this->source !== null) {
+            foreach ($this->source as $info) {
+                if ($info->isClass || $info->isEnum) { $this->handle($info); }
+            }
+            $this->finalize($context);
+        }
         if (!$this->routes) {
             $this->routes = $this->locator->getRoutes($context);
         }
@@ -75,54 +83,15 @@ final class AttributeRouteLocator implements RouteLocatorInterface, ClassListene
         return str_ends_with($target, '()') ? substr($target, 0, -2) : $target;
     }
 
-    public function entries(): iterable
-    {
-        $classes = [];
-
-        foreach ($this->attributes as [$target]) {
-            [$class, $method] = array_pad(explode('::', $target, 2), 2, null);
-            if (!class_exists($class)) {
-                continue;
-            }
-
-            $reflection = new ReflectionClass($class);
-            if (EntryClassEligibility::allows($reflection)) {
-                $classes[$reflection->getName()] = true;
-            }
-
-            if ($method === null || !$reflection->hasMethod($method)) {
-                continue;
-            }
-
-            $action = new ReflectionMethod($class, $method);
-            foreach ($action->getParameters() as $parameter) {
-                $dependency = TypeHints::classOf($parameter->getType(), $parameter->getDeclaringClass());
-                if ($dependency !== null && class_exists($dependency)) {
-                    $candidate = new ReflectionClass($dependency);
-                    if (EntryClassEligibility::allows($candidate)) {
-                        $classes[$candidate->getName()] = true;
-                    }
-                }
-            }
-        }
-
-        ksort($classes);
-        foreach (array_keys($classes) as $class) {
-            yield new AutowireEntry($class, 'route discovery');
-        }
-    }
-
-    public function finalize(): void
+    public function finalize(array $context = []): void
     {
         if ($this->isFinalized) {
             throw ListenerAlreadyFinalizedException::forListener($this);
         }
 
-        $this->isFinalized = true;
-
         usort($this->attributes, static fn(array $a, array $b): int => $b[1]->priority <=> $a[1]->priority);
 
-        $this->getRoutes();
+        $routes = $this->locator->getRoutes($context);
 
         $seen = [];
 
@@ -151,7 +120,9 @@ final class AttributeRouteLocator implements RouteLocatorInterface, ClassListene
             }
 
             $seen[$record->name] = $fingerprint;
-            $this->routes->addRoute($record);
+            $routes->addRoute($record);
         }
+        $this->routes = $routes;
+        $this->isFinalized = true;
     }
 }

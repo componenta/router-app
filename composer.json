@@ -1,25 +1,24 @@
 {
     "name": "componenta/router-app",
-    "description": "Componenta application integration for HTTP router discovery compilation",
+    "description": "Componenta application integration for source routes and explicit route builds",
     "type": "library",
     "license": "MIT",
     "require": {
         "php": "^8.4",
-        "componenta/app": "^3.0.2",
-        "componenta/app-console": "^3.0.3",
-        "componenta/app-http": "^2.0.1",
-        "componenta/class-finder": "^1.0",
-        "componenta/config": "^2.0.2",
-        "componenta/di": "^4.0.2",
-        "componenta/http-responder": "^1.0.2",
-        "componenta/interceptor": "^2.0.1",
-        "componenta/middleware-factory": "^2.0.1",
+        "componenta/app": "^4.0.0",
+        "componenta/app-console": "^4.0.0",
+        "componenta/class-finder": "^2.0.0",
+        "componenta/config": "^3.0.0",
+        "componenta/di": "^5.0.0",
+        "componenta/http-responder": "^1.0.3",
+        "componenta/interceptor": "^3.0.0",
+        "componenta/middleware-factory": "^2.1.0",
         "componenta/path-resolver": "^1.0",
-        "componenta/reflection": "^2.0",
-        "componenta/router": "^2.0.1",
+        "componenta/reflection": "^2.0.1",
+        "componenta/router": "^2.1.0",
         "componenta/scope": "^1.0",
         "componenta/tokenizer": "^1.0",
-        "componenta/var-export": "^1.0",
+        "componenta/var-export": "^2.0.0",
         "psr/container": "^2.0",
         "psr/http-message": "^2.0",
         "psr/http-server-middleware": "^1.0",
@@ -36,6 +35,9 @@
             "config-providers": [
                 "Componenta\\Http\\Router\\App\\ConfigProvider"
             ]
+        },
+        "branch-alias": {
+            "dev-main": "4.0.x-dev"
         }
     },
     "require-dev": {
