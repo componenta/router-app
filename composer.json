@@ -5,18 +5,18 @@
     "license": "MIT",
     "require": {
         "php": "^8.4",
-        "componenta/app": "^4.0.0",
-        "componenta/app-console": "^4.0.0",
-        "componenta/app-http": "^2.1.0",
-        "componenta/class-finder": "^2.0.0",
+        "componenta/app": "^5.0.0",
+        "componenta/app-console": "^5.0.0",
+        "componenta/app-http": "^3.0.0",
+        "componenta/class-finder": "^2.1.0",
         "componenta/config": "^3.0.0",
-        "componenta/di": "^5.0.0",
+        "componenta/di": "^5.0.3",
         "componenta/http-responder": "^1.0.3",
         "componenta/interceptor": "^3.0.0",
         "componenta/middleware-factory": "^2.1.0",
         "componenta/path-resolver": "^1.0",
         "componenta/reflection": "^2.0.1",
-        "componenta/router": "^2.1.0",
+        "componenta/router": "^3.0.0",
         "componenta/scope": "^1.0",
         "componenta/tokenizer": "^1.0",
         "componenta/var-export": "^2.0.0",
@@ -38,7 +38,7 @@
             ]
         },
         "branch-alias": {
-            "dev-main": "4.0.x-dev"
+            "dev-main": "5.0.x-dev"
         }
     },
     "require-dev": {
