@@ -1,7 +1,6 @@
 <?php
 declare(strict_types=1);
 namespace Componenta\Http\Router\App\Factory;
-use Componenta\App\ConfigKey as AppConfigKey;
 use Componenta\ClassFinder\ClassIterator;
 use Componenta\ClassFinder\ClassIteratorInterface;
 use Componenta\Config\ContainerValue;
@@ -19,8 +18,8 @@ final readonly class AttributeRouteLocatorFactory
         return new AttributeRouteLocator(
             new RouteLocator($paths->resolve($container->config->string(ConfigKey::ROUTES_FILE)),
                 $container->get(CompilerInterface::class, CompilerInterface::class), useCache: false),
-            $container->has(AppConfigKey::DISCOVERY_SOURCE)
-                ? $container->get(AppConfigKey::DISCOVERY_SOURCE, ClassIteratorInterface::class)
+            $container->has(ClassIteratorInterface::class)
+                ? $container->get(ClassIteratorInterface::class, ClassIteratorInterface::class)
                 : new ClassIterator([]),
         );
     }

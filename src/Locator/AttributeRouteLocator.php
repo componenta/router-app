@@ -58,13 +58,17 @@ final class AttributeRouteLocator implements RouteLocatorInterface, ClassListene
             foreach ($this->source as $info) {
                 if ($info->isClass || $info->isEnum) { $this->handle($info); }
             }
-            $this->finalize($context);
+            $routes = $this->finalizeRoutes($context);
+            if ($context === []) {
+                $this->routes = $routes;
+            }
+            return $routes;
         }
-        if (!$this->routes) {
-            $this->routes = $this->locator->getRoutes($context);
+        if ($context !== []) {
+            return $this->isFinalized ? $this->createRoutes($context) : $this->locator->getRoutes($context);
         }
 
-        return $this->routes;
+        return $this->routes ??= ($this->isFinalized ? $this->createRoutes([]) : $this->locator->getRoutes());
     }
 
     public function handle(ClassInfo $info): void
@@ -85,12 +89,27 @@ final class AttributeRouteLocator implements RouteLocatorInterface, ClassListene
 
     public function finalize(array $context = []): void
     {
+        $routes = $this->finalizeRoutes($context);
+        if ($context === []) {
+            $this->routes = $routes;
+        }
+    }
+
+    private function finalizeRoutes(array $context): Routes
+    {
         if ($this->isFinalized) {
             throw ListenerAlreadyFinalizedException::forListener($this);
         }
 
         usort($this->attributes, static fn(array $a, array $b): int => $b[1]->priority <=> $a[1]->priority);
 
+        $routes = $this->createRoutes($context);
+        $this->isFinalized = true;
+        return $routes;
+    }
+
+    private function createRoutes(array $context): Routes
+    {
         $routes = $this->locator->getRoutes($context);
 
         $seen = [];
@@ -122,7 +141,6 @@ final class AttributeRouteLocator implements RouteLocatorInterface, ClassListene
             $seen[$record->name] = $fingerprint;
             $routes->addRoute($record);
         }
-        $this->routes = $routes;
-        $this->isFinalized = true;
+        return $routes;
     }
 }

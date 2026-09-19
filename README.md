@@ -22,6 +22,11 @@ It creates directories and publishes a complete file using a temporary file and
 atomic rename. An unsupported optimization writes a fallback marker, replacing
 any earlier map, so old routes cannot remain active after a rebuild.
 
+The map captures the source inputs at build time. Re-run `app:build` after changing
+route definitions, configuration or external values used by the route file.
+Development and production are compared using the same inputs and a map built
+from those inputs.
+
 ## Runtime
 
 Development uses the source locator. Production uses the map when enabled and

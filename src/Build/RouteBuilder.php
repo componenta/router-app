@@ -2,6 +2,8 @@
 declare(strict_types=1);
 namespace Componenta\Http\Router\App\Build;
 use Componenta\App\Build\ApplicationBuilderInterface;
+use Componenta\App\Build\PhpMapFile;
+use Componenta\App\Build\ApplicationBuildCleanerInterface;
 use Componenta\Http\Router\App\Locator\AttributeRouteLocator;
 use Componenta\Http\Router\Cache\RouteCacheGenerator;
 use Componenta\Http\Router\Compiler;
@@ -15,9 +17,14 @@ use Componenta\VarExport\Exception\ExceptionInterface as ExportException;
 use ErrorException;
 use RuntimeException;
 
-final readonly class RouteBuilder implements ApplicationBuilderInterface
+final readonly class RouteBuilder implements ApplicationBuilderInterface, ApplicationBuildCleanerInterface
 {
     public function __construct(private AttributeRouteLocator $source, private string $file, private RouteCacheGenerator $generator) {}
+
+    public function clean(): void
+    {
+        PhpMapFile::remove($this->file);
+    }
 
     public function build(): void
     {
