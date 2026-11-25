@@ -13,7 +13,8 @@ final readonly class RouteLocatorFactory
     public function __invoke(ContainerValue $container): RouteLocatorInterface
     {
         $source = static fn (): AttributeRouteLocator => $container->get(AttributeRouteLocator::class, AttributeRouteLocator::class);
-        if ($container->config->environment->match('APP_ENV', 'production')
+        if (!$container->config->environment->bool('APP_DISCOVERY_SOURCE', false)
+            && $container->config->environment->match('APP_ENV', 'production')
             && $container->config->bool(ConfigKey::COMPILED_PIPELINE, true)) {
             return new CachedRouteLocator(BaseRouteLocatorFactory::cacheFile($container), $source);
         }

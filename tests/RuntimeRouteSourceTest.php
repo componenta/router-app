@@ -31,7 +31,7 @@ $routes->addRoute(\Componenta\Http\Router\RouteRecord::get(
 ));
 PHP);
     try {
-        $container = static function (string $mode, bool $optimized = true) use ($root): ContainerValue {
+        $container = static function (string $mode, bool $optimized = true, bool $forceSource = false) use ($root): ContainerValue {
             $providers = [new \Componenta\App\ConfigProvider(), new \Componenta\App\Console\ConfigProvider(),
                 new \Componenta\Http\Router\ConfigProvider(), new \Componenta\Http\Router\App\ConfigProvider()];
             $providers[] = static fn (): array => [
@@ -44,7 +44,7 @@ PHP);
                     \Componenta\ClassFinder\ClassIteratorInterface::class => new ClassIterator([new ClassInfo(RouteBuildSnapshotAction::class)]),
                 ]],
             ];
-            $composition = (new ConfigFactory())->create(new Environment(['APP_ENV' => $mode]), ...$providers);
+            $composition = (new ConfigFactory())->create(new Environment(['APP_ENV' => $mode, 'APP_DISCOVERY_SOURCE' => $forceSource]), ...$providers);
             return (new ContainerFactory())->create($composition->config, $composition->dependencies);
         };
         $assertRoutes = static function ($routes, string $prefix): void {
@@ -66,6 +66,11 @@ PHP);
             $assertRoutes($container('development')->get(RouteLocatorInterface::class)->getRoutes(), $prefix);
             $assertRoutes($container('production', false)->get(RouteLocatorInterface::class)->getRoutes(), $prefix);
         }
+        file_put_contents($root . '/prefix.txt', '/recovery');
+        $assertRoutes($container('production')->get(RouteLocatorInterface::class)->getRoutes(), '/updated');
+        $recovery = $container('production', forceSource: true)->get(RouteLocatorInterface::class)->getRoutes();
+        expect($recovery)->not->toBeInstanceOf(CompiledRoutes::class);
+        $assertRoutes($recovery, '/recovery');
     } finally {
         foreach (['routes.php', 'prefix.txt', 'optimized.php'] as $file) {
             if (is_file($root . '/' . $file)) { unlink($root . '/' . $file); }
