@@ -61,3 +61,5 @@ locator as a mandatory discovery listener. Regenerate the route cache with
 `app:build` after upgrading.
 
 The base router config provider registers the route handler resolver slot exactly once. Load the router-app provider after the base router provider (as for the route locator); it replaces the slot alias with the intercepted resolver rather than appending a competing resolver to the middleware chain.
+
+Repeated builds reload file routes using the same discovery snapshot and do not mutate the runtime locator's existing collection. The router cache generator is the owner of the supported preparation contract; unsupported compiler or syntax configurations fall back to the source. Genuine route-definition errors still fail the build.

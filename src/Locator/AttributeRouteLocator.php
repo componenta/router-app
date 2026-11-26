@@ -54,6 +54,12 @@ final class AttributeRouteLocator implements RouteLocatorInterface, ClassListene
 
     public function getRoutes(array $context = []): RouteCollectorInterface
     {
+        return $context === [] ? ($this->routes ??= $this->loadRoutes()) : $this->loadRoutes($context);
+    }
+
+    /** Load current file routes and the shared discovery snapshot without replacing the runtime collection. */
+    public function loadRoutes(array $context = []): Routes
+    {
         if (!$this->isFinalized && $this->source !== null) {
             $previous = $this->attributes;
             try {
@@ -67,16 +73,10 @@ final class AttributeRouteLocator implements RouteLocatorInterface, ClassListene
                 $this->attributes = $previous;
                 throw $error;
             }
-            if ($context === []) {
-                $this->routes = $routes;
-            }
             return $routes;
         }
-        if ($context !== []) {
-            return $this->isFinalized ? $this->createRoutes($context) : $this->locator->getRoutes($context);
-        }
 
-        return $this->routes ??= ($this->isFinalized ? $this->createRoutes([]) : $this->locator->getRoutes());
+        return $this->isFinalized ? $this->createRoutes($context) : $this->locator->getRoutes($context);
     }
 
     public function handle(ClassInfo $info): void

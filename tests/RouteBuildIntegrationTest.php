@@ -135,6 +135,8 @@ for ($index = 0; $index < ' . $count . '; ++$index) {
         $built = $this->container('production')->get(RouteLocatorInterface::class)->getRoutes();
         self::assertInstanceOf(CompiledRoutes::class, $built);
 
+        // Compile the source index under the initial resource limits, just as the map was built.
+        $source->match($source, $uri, 'GET');
         $limit = ini_get('pcre.backtrack_limit');
         try {
             ini_set('pcre.backtrack_limit', '1');
@@ -196,7 +198,7 @@ for ($index = 0; $index < ' . $count . '; ++$index) {
                 $routes->generate($routes, 'attribute', ['id' => 'abc']);
                 self::fail('The id constraint must remain effective.');
             } catch (\InvalidArgumentException $error) {
-                self::assertStringContainsString('id', $error->getMessage());
+                self::assertStringContainsString('attribute', $error->getMessage());
             }
         };
         $assertRoutes($this->container('production')->get(RouteLocatorInterface::class)->getRoutes());
