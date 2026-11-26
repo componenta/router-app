@@ -109,9 +109,10 @@ describe('router app ConfigProvider', function () {
 
         expect($config[AppConfigKey::BUILDERS])->toBe([RouteBuilder::class])
             ->and($config[AppConfigKey::BOOTLOADERS])->toBe([RoutingBootloader::class])
-            ->and($config[MiddlewareConfigKey::RESOLVERS])->toBe([
-            InterceptedRouteHandlerResolver::class,
-        ])->and($config[ConsoleConfigKey::COMMANDS])->toBe([
+            ->and($config)->not->toHaveKey(MiddlewareConfigKey::RESOLVERS)
+            ->and($config[DependencyConfigKey::DEPENDENCIES][DependencyConfigKey::ALIASES][RouterConfigKey::HANDLER_RESOLVER])
+            ->toBe(InterceptedRouteHandlerResolver::class)
+            ->and($config[ConsoleConfigKey::COMMANDS])->toBe([
             RouterListCommand::class,
         ])->and($config[RouterConfigKey::ROUTES_FILE])->toBe('config/routes.php')
             ->and($config[DependencyConfigKey::DEPENDENCIES])->not->toHaveKey('autowires')
@@ -154,4 +155,29 @@ describe('router app ConfigProvider', function () {
             ],
         ]);
     });
+});
+
+
+it('selects exactly one intercepted route resolver in the composed middleware chain', function (): void {
+    $composition = (new \Componenta\Config\ConfigFactory())->create(
+        new \Componenta\Config\Environment([]),
+        new \Componenta\Http\Middleware\ConfigProvider(),
+        new \Componenta\Http\Router\ConfigProvider(),
+        new ConfigProvider(),
+        static fn (): array => [
+            DependencyConfigKey::DEPENDENCIES => [DependencyConfigKey::SERVICES => [
+                CallableExecutorInterface::class => new RouterAppFactoryCallableExecutor(),
+                PipelineInterface::class => new RouterAppFactoryPipeline(),
+            ]],
+        ],
+    );
+    expect($composition->config->get(MiddlewareConfigKey::RESOLVERS))->toBe([RouterConfigKey::HANDLER_RESOLVER])
+        ->and($composition->dependencies->sections[DependencyConfigKey::ALIASES][RouterConfigKey::HANDLER_RESOLVER])
+        ->toBe(InterceptedRouteHandlerResolver::class);
+
+    $container = (new \Componenta\DI\ContainerFactory())->create($composition->config, $composition->dependencies);
+    $resolved = $container->get(\Componenta\Http\Middleware\MiddlewareFactory::class)->createMiddleware(
+        new \Componenta\Http\Router\RouteHandler(static fn () => null),
+    );
+    expect($resolved)->toBeInstanceOf(\Componenta\Http\Router\App\Resolver\InterceptedRouteHandlerMiddleware::class);
 });

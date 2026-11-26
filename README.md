@@ -59,3 +59,5 @@ Remove registrations of `RouteCacheCompiler` and route autowire contributors.
 The ConfigProvider now registers `RouteBuilder`; it no longer registers the
 locator as a mandatory discovery listener. Regenerate the route cache with
 `app:build` after upgrading.
+
+The base router config provider registers the route handler resolver slot exactly once. Load the router-app provider after the base router provider (as for the route locator); it replaces the slot alias with the intercepted resolver rather than appending a competing resolver to the middleware chain.

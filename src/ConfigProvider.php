@@ -8,7 +8,6 @@ use Componenta\App\Console\ConfigKey as ConsoleConfigKey;
 use Componenta\App\ConfigKey as AppConfigKey;
 use Componenta\Config\ConfigProvider as BaseConfigProvider;
 use Componenta\Http\Router\App\Console\RouterListCommand;
-use Componenta\Http\Middleware\ConfigKey as MiddlewareConfigKey;
 use Componenta\Http\Router\App\Boot\RoutingBootloader;
 use Componenta\Http\Router\App\Build\RouteBuilder;
 use Componenta\Http\Router\App\Build\RouteBuilderFactory;
@@ -32,6 +31,11 @@ final class ConfigProvider extends BaseConfigProvider
         ];
     }
 
+    protected function getAliases(): array
+    {
+        return [RouterConfigKey::HANDLER_RESOLVER => InterceptedRouteHandlerResolver::class];
+    }
+
     protected function getConfig(): array
     {
         return [
@@ -39,9 +43,6 @@ final class ConfigProvider extends BaseConfigProvider
                 RoutingBootloader::class,
             ],
             AppConfigKey::BUILDERS => [RouteBuilder::class],
-            MiddlewareConfigKey::RESOLVERS => [
-                InterceptedRouteHandlerResolver::class,
-            ],
             ConsoleConfigKey::COMMANDS => [
                 RouterListCommand::class,
             ],
