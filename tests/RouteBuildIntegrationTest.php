@@ -80,8 +80,8 @@ for ($index = 0; $index < ' . $count . '; ++$index) {
 
     public static function largeRouteSets(): iterable
     {
-        yield 'many bounded expressions' => [600, 120];
-        yield 'fixed size chunks exceed PCRE limit' => [500, 1800];
+        yield 'many individual expressions' => [600, 120];
+        yield 'long literal paths' => [500, 1800];
     }
 
     #[\PHPUnit\Framework\Attributes\DataProvider('invalidRegexSections')]
@@ -91,14 +91,14 @@ for ($index = 0; $index < ' . $count . '; ++$index) {
         $file = $this->root . '/optimized.php';
         $cache = \Componenta\App\Build\PhpMapFile::read($file, str_repeat('a', 32));
         self::assertIsArray($cache);
-        self::assertArrayHasKey('dynamicChunks', $cache);
+        self::assertArrayHasKey('dynamicIndex', $cache);
         if ($section === 'integrity') {
             // A well-formed expression changed after preparation must not be trusted.
-            $cache['dynamicChunks']['GET'][0]['regex'] = '#\A/other/(?P<id>\d+)\z#';
+            $cache['routeData']['attribute']['regex'] = '#\A/other/(?P<id>\d+)\z#';
         } else {
-            // Recompute the fixture checksum so validation reaches the invalid PCRE
-            // expression even with the application's warning-to-exception handler.
-            $cache['dynamicChunks']['GET'][0]['regex'] = '#[#';
+            // Recompute the fixture checksum so expression validation is reached
+            // even with the application's warning-to-exception handler.
+            $cache['routeData']['attribute']['regex'] = '#[#';
             unset($cache['fingerprint']);
             $cache['fingerprint'] = hash('xxh128', serialize($cache));
         }
@@ -157,14 +157,14 @@ for ($index = 0; $index < ' . $count . '; ++$index) {
 
     public static function matchingRouteSets(): iterable
     {
-        yield 'small chunk matching' => [3, 10];
-        yield 'chunk matching' => [500, 1800];
+        yield 'small route set' => [3, 10];
+        yield 'large route set' => [500, 1800];
     }
 
     public static function invalidRegexSections(): iterable
     {
         yield 'content fingerprint mismatch' => ['integrity'];
-        yield 'invalid chunk expression' => ['expression'];
+        yield 'invalid individual expression' => ['expression'];
     }
 
     public function testBuiltMatchesKeepTheHandlersAndMiddlewaresOfTheirPublicRecords(): void
@@ -305,7 +305,7 @@ PHP);
         $cache['version'] = 4;
         $cache['regex'] = ['GET' => '#^(?:/items/(?P<MARK>[^/]+)(*MARK:r0)|/attribute/(?P<id>[^/]+)(*MARK:r1))$#J'];
         $cache['routeMap'] = ['GET' => ['r0' => 'marked', 'r1' => 'attribute']];
-        unset($cache['dynamicChunks'], $cache['prefixIndex']);
+        unset($cache['dynamicIndex']);
         \Componenta\App\Build\PhpMapFile::write($file, $cache, str_repeat('a', 32));
         $routes = $this->container('production')->get(RouteLocatorInterface::class)->getRoutes();
         self::assertSame(['MARK' => 17], $routes->match($routes, '/items/17', 'GET')->parameters);
