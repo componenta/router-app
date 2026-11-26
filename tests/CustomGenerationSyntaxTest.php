@@ -45,6 +45,8 @@ final class CustomGenerationSyntaxTest extends TestCase
                         \Componenta\Config\ConfigKey::DEPENDENCIES => [
                             \Componenta\Config\ConfigKey::SERVICES => [
                                 \Componenta\Stdlib\PathResolverInterface::class => new \Componenta\Stdlib\PathResolver($root),
+                                \Componenta\App\ConfigKey::BUILD_GENERATION => str_repeat('a', 32),
+                                \Componenta\App\ConfigKey::DISCOVERY_GENERATION => str_repeat('a', 32),
                                 \Componenta\App\ConfigKey::DISCOVERY_SOURCE => new \Componenta\ClassFinder\ClassIterator([]),
                             ],
                         ],

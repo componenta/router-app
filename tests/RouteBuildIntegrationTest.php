@@ -41,6 +41,8 @@ final class RouteBuildIntegrationTest extends TestCase
                 ConfigKey::ROUTES_FILE => 'routes.php', ConfigKey::ROUTES_CACHE_FILE => 'optimized.php',
                 DIConfigKey::DEPENDENCIES => [DIConfigKey::SERVICES => [
                     PathResolverInterface::class => new PathResolver($this->root),
+                    \Componenta\App\ConfigKey::BUILD_GENERATION => str_repeat('a', 32),
+                    \Componenta\App\ConfigKey::DISCOVERY_GENERATION => str_repeat('a', 32),
                     \Componenta\App\ConfigKey::DISCOVERY_SOURCE => new ClassIterator([new ClassInfo(BuiltRouteAction::class)]),
                     \Componenta\ClassFinder\ClassIteratorInterface::class => new ClassIterator([new ClassInfo(BuiltRouteAction::class)]),
                 ]],
@@ -87,14 +89,15 @@ for ($index = 0; $index < ' . $count . '; ++$index) {
     {
         $this->container('production')->get(ApplicationBuildOrchestrator::class)->build();
         $file = $this->root . '/optimized.php';
-        $cache = require $file;
+        $cache = \Componenta\App\Build\PhpMapFile::read($file, str_repeat('a', 32));
+        self::assertIsArray($cache);
         if ($section === 'regex') {
             $cache['regex']['GET'] = '#[#';
         } else {
             unset($cache['regex']);
             $cache['dynamicChunks']['GET'] = [['regex' => '#[#', 'routeMap' => ['r0' => 'attribute']]];
         }
-        file_put_contents($file, '<?php return ' . var_export($cache, true) . ';');
+        \Componenta\App\Build\PhpMapFile::write($file, $cache, str_repeat('a', 32));
 
         set_error_handler(static function (int $level, string $message, string $file, int $line): never {
             throw new \ErrorException($message, 0, $level, $file, $line);
@@ -198,13 +201,14 @@ for ($index = 0; $index < ' . $count . '; ++$index) {
         $assertRoutes($built);
 
         $file = $this->root . '/optimized.php';
-        $cache = require $file;
+        $cache = \Componenta\App\Build\PhpMapFile::read($file, str_repeat('a', 32));
+        self::assertIsArray($cache);
         if ($global) {
             $cache[$field] = $value;
         } else {
             $cache['routeData']['attribute'][$field] = $value;
         }
-        file_put_contents($file, '<?php return ' . var_export($cache, true) . ';');
+        \Componenta\App\Build\PhpMapFile::write($file, $cache, str_repeat('a', 32));
         set_error_handler(static function (int $level, string $message, string $file, int $line): never {
             throw new \ErrorException($message, 0, $level, $file, $line);
         });
@@ -288,12 +292,13 @@ PHP);
         }
 
         $file = $this->root . '/optimized.php';
-        $cache = require $file;
+        $cache = \Componenta\App\Build\PhpMapFile::read($file, str_repeat('a', 32));
+        self::assertIsArray($cache);
         $cache['version'] = 4;
         $cache['regex'] = ['GET' => '#^(?:/items/(?P<MARK>[^/]+)(*MARK:r0)|/attribute/(?P<id>[^/]+)(*MARK:r1))$#J'];
         $cache['routeMap'] = ['GET' => ['r0' => 'marked', 'r1' => 'attribute']];
         unset($cache['dynamicChunks'], $cache['prefixIndex']);
-        file_put_contents($file, '<?php return ' . var_export($cache, true) . ';');
+        \Componenta\App\Build\PhpMapFile::write($file, $cache, str_repeat('a', 32));
         $routes = $this->container('production')->get(RouteLocatorInterface::class)->getRoutes();
         self::assertSame(['MARK' => 17], $routes->match($routes, '/items/17', 'GET')->parameters);
         self::assertSame(['id' => 42], $routes->match($routes, '/attribute/42', 'GET')->parameters);
@@ -335,22 +340,20 @@ PHP);
 $routes->addRoute(\Componenta\Http\Router\RouteRecord::get('pair', '/pair/[id]/[id]', 'Handler'));
 $routes->addRoute(\Componenta\Http\Router\RouteRecord::get('other', '/other/[id]', 'Handler'));
 PHP);
-        $this->container('production')->get(ApplicationBuildOrchestrator::class)->build();
-        set_error_handler(static function (int $level, string $message): never {
-            throw new \ErrorException($message, 0, $level);
-        });
         try {
-            foreach (['development', 'production'] as $mode) {
-                $routes = $this->container($mode)->get(RouteLocatorInterface::class)->getRoutes();
-                try {
-                    $routes->match($routes, '/pair/1/2', 'GET');
-                    self::fail($mode . ' accepted a duplicate parameter name.');
-                } catch (\ErrorException $error) {
-                    self::assertStringContainsString('two named subpatterns have the same name', $error->getMessage());
-                }
+            $this->container('production')->get(ApplicationBuildOrchestrator::class)->build();
+            self::fail('Build accepted a duplicate route parameter.');
+        } catch (\InvalidArgumentException $error) {
+            self::assertStringContainsString('Duplicate route parameter: id', $error->getMessage());
+        }
+        foreach (['development', 'production'] as $mode) {
+            $routes = $this->container($mode)->get(RouteLocatorInterface::class)->getRoutes();
+            try {
+                $routes->match($routes, '/pair/1/2', 'GET');
+                self::fail($mode . ' accepted a duplicate route parameter.');
+            } catch (\InvalidArgumentException $error) {
+                self::assertStringContainsString('Duplicate route parameter: id', $error->getMessage());
             }
-        } finally {
-            restore_error_handler();
         }
     }
 

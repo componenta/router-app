@@ -40,6 +40,8 @@ PHP);
                 ConfigKey::COMPILED_PIPELINE => $optimized,
                 \Componenta\Config\ConfigKey::DEPENDENCIES => [\Componenta\Config\ConfigKey::SERVICES => [
                     PathResolverInterface::class => new PathResolver($root),
+                    \Componenta\App\ConfigKey::BUILD_GENERATION => str_repeat('a', 32),
+                    \Componenta\App\ConfigKey::DISCOVERY_GENERATION => str_repeat('a', 32),
                     \Componenta\App\ConfigKey::DISCOVERY_SOURCE => new ClassIterator([new ClassInfo(RouteBuildSnapshotAction::class)]),
                     \Componenta\ClassFinder\ClassIteratorInterface::class => new ClassIterator([new ClassInfo(RouteBuildSnapshotAction::class)]),
                 ]],
@@ -79,7 +81,7 @@ PHP);
     }
 });
 
-it('uses prepared classes for runtime fallback and current classes for the next build', function (): void {
+it('uses the shared discovery source for runtime fallback and the next build', function (): void {
     $root = sys_get_temp_dir() . '/route_discovery_sources_' . bin2hex(random_bytes(8));
     mkdir($root);
     file_put_contents($root . '/routes.php', '<?php $routes->addRoute(\\Componenta\\Http\\Router\\RouteRecord::get("file", "/file", "FileHandler"));');
@@ -92,6 +94,8 @@ it('uses prepared classes for runtime fallback and current classes for the next 
                     \Componenta\Config\ConfigKey::DEPENDENCIES => [
                         \Componenta\Config\ConfigKey::SERVICES => [
                             PathResolverInterface::class => new PathResolver($root),
+                            \Componenta\App\ConfigKey::BUILD_GENERATION => str_repeat('a', 32),
+                            \Componenta\App\ConfigKey::DISCOVERY_GENERATION => str_repeat('a', 32),
                             \Componenta\ClassFinder\ClassIteratorInterface::class => new ClassIterator([]),
                         ],
                         \Componenta\Config\ConfigKey::FACTORIES => [
@@ -108,7 +112,7 @@ it('uses prepared classes for runtime fallback and current classes for the next 
     try {
         $container = $create();
         expect(array_keys($container->get(RouteLocatorInterface::class)->getRoutes()->toArray()))
-            ->toBe(['file'])->and($sourceRequests)->toBe(0);
+            ->toBe(['file', 'attribute'])->and($sourceRequests)->toBe(1);
         $container->get(\Componenta\Http\Router\App\Build\RouteBuilder::class)->build();
         expect($sourceRequests)->toBe(1);
         $routes = $create()->get(RouteLocatorInterface::class)->getRoutes();

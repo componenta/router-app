@@ -49,6 +49,8 @@ final class CachedGenerationParityTest extends TestCase
                         ConfigKey::ROUTES_CACHE_FILE => 'routes.cache.php',
                         DependencyKey::DEPENDENCIES => [DependencyKey::SERVICES => [
                             PathResolverInterface::class => new PathResolver($root),
+                            \Componenta\App\ConfigKey::BUILD_GENERATION => str_repeat('a', 32),
+                            \Componenta\App\ConfigKey::DISCOVERY_GENERATION => str_repeat('a', 32),
                             \Componenta\App\ConfigKey::DISCOVERY_SOURCE => new ClassIterator([]),
                         ]],
                     ],
@@ -63,6 +65,7 @@ final class CachedGenerationParityTest extends TestCase
             }
             self::assertSame(0, (new CommandTester($container('production')->get(BuildCommand::class)))->execute([]));
             $optimized = $container('production')->get(RouteLocatorInterface::class)->getRoutes();
+            self::assertInstanceOf(\Componenta\Http\Router\CompiledRoutes::class, $optimized);
             self::assertSame(['id' => 42], $optimized->match($optimized, $expected, 'GET')->parameters);
             self::assertSame($expected, $optimized->generate($optimized, 'image', ['id' => 42]));
         } finally {

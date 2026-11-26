@@ -41,6 +41,8 @@ it('preserves external collector constraints through app build', function (strin
                         DependencyKey::ALIASES => [CompilerInterface::class => 'test.route.compiler'],
                         DependencyKey::SERVICES => [
                             PathResolverInterface::class => new PathResolver($root),
+                            \Componenta\App\ConfigKey::BUILD_GENERATION => str_repeat('a', 32),
+                            \Componenta\App\ConfigKey::DISCOVERY_GENERATION => str_repeat('a', 32),
                             \Componenta\App\ConfigKey::DISCOVERY_SOURCE => new ClassIterator([]),
                             'test.route.compiler' => new Compiler(defaultPatterns: ['id' => '[A-Z]+']),
                         ],
