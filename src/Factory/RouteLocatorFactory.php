@@ -1,12 +1,16 @@
 <?php
+
 declare(strict_types=1);
+
 namespace Componenta\Http\Router\App\Factory;
+
+use Componenta\App\ConfigKey as AppConfigKey;
 use Componenta\Config\ContainerValue;
 use Componenta\Http\Router\App\Locator\AttributeRouteLocator;
+use Componenta\Http\Router\App\Locator\PreparedRouteLocator;
 use Componenta\Http\Router\ConfigKey;
 use Componenta\Http\Router\Contract\RouteLocatorInterface;
 use Componenta\Http\Router\Factory\RouteLocatorFactory as BaseRouteLocatorFactory;
-use Componenta\Http\Router\Locator\CachedRouteLocator;
 
 final readonly class RouteLocatorFactory
 {
@@ -15,8 +19,12 @@ final readonly class RouteLocatorFactory
         $source = static fn (): AttributeRouteLocator => $container->get(AttributeRouteLocator::class, AttributeRouteLocator::class);
         if (!$container->config->environment->bool('APP_DISCOVERY_SOURCE', false)
             && $container->config->environment->match('APP_ENV', 'production')
-            && $container->config->bool(ConfigKey::COMPILED_PIPELINE, true)) {
-            return new CachedRouteLocator(BaseRouteLocatorFactory::cacheFile($container), $source);
+            && $container->config->bool(ConfigKey::COMPILED_PIPELINE, true)
+            && $container->has(AppConfigKey::DISCOVERY_GENERATION)) {
+            $generation = $container->get(AppConfigKey::DISCOVERY_GENERATION);
+            if (is_string($generation) && preg_match('/\A[0-9a-f]{32}\z/', $generation) === 1) {
+                return new PreparedRouteLocator(BaseRouteLocatorFactory::cacheFile($container), $generation, $source);
+            }
         }
         return $source();
     }

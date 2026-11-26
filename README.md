@@ -1,7 +1,7 @@
 # Componenta Router App
 
 Registers attribute routes, HTTP routing middleware, intercepted route handlers
-and the `router:list` command. Requires App 4, Config 3 and DI 5.
+and the `router:list` command. Requires App 6, Config 4, DI 6, Router 4 and PHP 8.5.13+.
 
 Register both `Componenta\Http\Router\ConfigProvider` and
 `Componenta\Http\Router\App\ConfigProvider` through the usual provider list.
@@ -18,9 +18,7 @@ Resolving the command or displaying help does not create the builder or scan
 classes for the build. Runtime never launches a build.
 
 The builder receives the original locator and the configured route compiler.
-It creates directories and publishes a complete file using a temporary file and
-atomic rename. An unsupported optimization writes a fallback marker, replacing
-any earlier map, so old routes cannot remain active after a rebuild.
+It uses App's shared PhpMapFile writer, tied to app.build.generation. An unsupported optimization publishes an empty router payload, replacing any earlier map so old routes cannot remain active after a rebuild. app:clean removes the owned artifact via the same utility.
 
 The map captures the source inputs at build time. Re-run `app:build` after changing
 route definitions, configuration or external values used by the route file.
@@ -29,10 +27,7 @@ from those inputs.
 
 ## Runtime
 
-Development uses the source locator. Production uses the map when enabled and
-readable; missing, incompatible or structurally invalid maps use the complete
-source locator, including attribute routes. Explicit context supplied to
-`getRoutes($context)` also goes through the source.
+Development and APP_DISCOVERY_SOURCE=1 use the full source locator. Production uses a map only if its generation matches app.discovery.generation and its Router payload validates. Missing, incompatible, wrong-generation or malformed maps fall back to app.discovery.source and the configured route file. Explicit context supplied to getRoutes($context) also bypasses the map.
 
 Public route records preserve the original path, tokens and defaults.
 Both matchers report the complete, sorted set of allowed methods for overlapping
