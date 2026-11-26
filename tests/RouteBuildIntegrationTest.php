@@ -80,7 +80,7 @@ for ($index = 0; $index < ' . $count . '; ++$index) {
 
     public static function largeRouteSets(): iterable
     {
-        yield 'unified expression exceeds PCRE limit' => [600, 120];
+        yield 'many bounded expressions' => [600, 120];
         yield 'fixed size chunks exceed PCRE limit' => [500, 1800];
     }
 
@@ -91,11 +91,16 @@ for ($index = 0; $index < ' . $count . '; ++$index) {
         $file = $this->root . '/optimized.php';
         $cache = \Componenta\App\Build\PhpMapFile::read($file, str_repeat('a', 32));
         self::assertIsArray($cache);
-        if ($section === 'regex') {
-            $cache['regex']['GET'] = '#[#';
+        self::assertArrayHasKey('dynamicChunks', $cache);
+        if ($section === 'integrity') {
+            // A well-formed expression changed after preparation must not be trusted.
+            $cache['dynamicChunks']['GET'][0]['regex'] = '#\A/other/(?P<id>\d+)\z#';
         } else {
-            unset($cache['regex']);
-            $cache['dynamicChunks']['GET'] = [['regex' => '#[#', 'routeMap' => ['r0' => 'attribute']]];
+            // Recompute the fixture checksum so validation reaches the invalid PCRE
+            // expression even with the application's warning-to-exception handler.
+            $cache['dynamicChunks']['GET'][0]['regex'] = '#[#';
+            unset($cache['fingerprint']);
+            $cache['fingerprint'] = hash('xxh128', serialize($cache));
         }
         \Componenta\App\Build\PhpMapFile::write($file, $cache, str_repeat('a', 32));
 
@@ -105,6 +110,7 @@ for ($index = 0; $index < ' . $count . '; ++$index) {
         try {
             foreach (['development', 'production'] as $mode) {
                 $routes = $this->container($mode)->get(RouteLocatorInterface::class)->getRoutes();
+                self::assertNotInstanceOf(CompiledRoutes::class, $routes);
                 self::assertSame(['file', 'attribute'], array_keys($routes->toArray()));
                 self::assertSame(['id' => 42], $routes->match($routes, '/attribute/42', 'GET')->parameters);
             }
@@ -149,14 +155,14 @@ for ($index = 0; $index < ' . $count . '; ++$index) {
 
     public static function matchingRouteSets(): iterable
     {
-        yield 'unified matching' => [3, 10];
+        yield 'small chunk matching' => [3, 10];
         yield 'chunk matching' => [500, 1800];
     }
 
     public static function invalidRegexSections(): iterable
     {
-        yield 'unified expression' => ['regex'];
-        yield 'chunk expression' => ['dynamicChunks'];
+        yield 'content fingerprint mismatch' => ['integrity'];
+        yield 'invalid chunk expression' => ['expression'];
     }
 
     public function testBuiltMatchesKeepTheHandlersAndMiddlewaresOfTheirPublicRecords(): void
@@ -355,6 +361,47 @@ PHP);
                 self::assertStringContainsString('Duplicate route parameter: id', $error->getMessage());
             }
         }
+    }
+
+    public function testSharedPrefixSuffixMatchingHasIdenticalSourceAndPreparedObservations(): void
+    {
+        file_put_contents($this->root . '/routes.php', <<<'PHP'
+<?php
+$routes->addRoute(\Componenta\Http\Router\RouteRecord::get('wildcard', '/{scope}/{id}/special', 'Wildcard', ['Auth']));
+for ($i = 0; $i < 1000; ++$i) {
+    $routes->addRoute(new \Componenta\Http\Router\RouteRecord(
+        'item-' . $i, '/items/{id}/' . $i, 'Handler', ['GET', 'POST'], defaults: ['scope' => 'read'],
+    ));
+}
+$routes->addRoute(\Componenta\Http\Router\RouteRecord::get('literal', '/items/{id}/special', 'Literal'));
+PHP);
+        $this->container('production')->get(ApplicationBuildOrchestrator::class)->build();
+        $source = $this->container('development')->get(RouteLocatorInterface::class)->getRoutes();
+        $prepared = $this->container('production')->get(RouteLocatorInterface::class)->getRoutes();
+        self::assertInstanceOf(CompiledRoutes::class, $prepared);
+
+        $observe = static function ($routes, string $uri, string $method): array {
+            try {
+                $match = $routes->match($routes, $uri, $method);
+                return [$match->name, $match->parameters, $match->route->toArray(), $match->middlewares?->toArray()];
+            } catch (\Componenta\Http\Router\Exception\MethodNotAllowedException $error) {
+                return [$error::class, $error->getCode(), $error->allowHeader];
+            } catch (\Componenta\Http\Router\Exception\RouteNotFoundException $error) {
+                return [$error::class, $error->getCode()];
+            }
+        };
+        foreach (range(1, 2) as $_) {
+            foreach ([
+                ['/items/42/0', 'GET'], ['/items/42/999', 'GET'], ['/items/42/999', 'POST'],
+                ['/items/42/999', 'DELETE'], ['/items/42/unknown', 'GET'],
+                ['/items/42/special', 'GET'], ['/attribute/42', 'GET'],
+            ] as [$uri, $method]) {
+                self::assertSame($observe($source, $uri, $method), $observe($prepared, $uri, $method));
+            }
+            self::assertSame('/items/42/999', $prepared->generate($prepared, 'item-999', ['id' => 42]));
+            self::assertSame($source->generate($source, 'item-999', ['id' => 42]), $prepared->generate($prepared, 'item-999', ['id' => 42]));
+        }
+        self::assertSame('wildcard', $prepared->match($prepared, '/items/42/special', 'GET')->name);
     }
 
     public function testCommandHelpDoesNotCreateTheSourceOrWriteCache(): void {
