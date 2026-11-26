@@ -11,6 +11,7 @@ use Componenta\Http\Router\App\Locator\PreparedRouteLocator;
 use Componenta\Http\Router\ConfigKey;
 use Componenta\Http\Router\Contract\RouteLocatorInterface;
 use Componenta\Http\Router\Factory\RouteLocatorFactory as BaseRouteLocatorFactory;
+use Componenta\Stdlib\PathResolverInterface;
 
 final readonly class RouteLocatorFactory
 {
@@ -23,9 +24,19 @@ final readonly class RouteLocatorFactory
             && $container->has(AppConfigKey::DISCOVERY_GENERATION)) {
             $generation = $container->get(AppConfigKey::DISCOVERY_GENERATION);
             if (is_string($generation) && preg_match('/\A[0-9a-f]{32}\z/', $generation) === 1) {
-                return new PreparedRouteLocator(BaseRouteLocatorFactory::cacheFile($container), $generation, $source);
+                return new PreparedRouteLocator(self::cacheFile($container), $generation, $source);
             }
         }
         return $source();
+    }
+
+    /** The router must never publish or clean an App-owned discovery or boot map. */
+    public static function cacheFile(ContainerValue $container): string
+    {
+        $paths = $container->get(PathResolverInterface::class, PathResolverInterface::class);
+        return BaseRouteLocatorFactory::cacheFile($container, [
+            $paths->resolve(AppConfigKey::DISCOVERY_MAP_FILE),
+            $paths->resolve(AppConfigKey::BOOT_MAP_FILE),
+        ]);
     }
 }

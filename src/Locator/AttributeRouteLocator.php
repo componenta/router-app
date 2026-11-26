@@ -55,10 +55,18 @@ final class AttributeRouteLocator implements RouteLocatorInterface, ClassListene
     public function getRoutes(array $context = []): RouteCollectorInterface
     {
         if (!$this->isFinalized && $this->source !== null) {
-            foreach ($this->source as $info) {
-                if ($info->isClass || $info->isEnum) { $this->handle($info); }
+            $previous = $this->attributes;
+            try {
+                foreach ($this->source as $info) {
+                    if ($info->isClass || $info->isEnum) { $this->handle($info); }
+                }
+                $routes = $this->finalizeRoutes($context);
+            } catch (\Throwable $error) {
+                // A failed discovery/finalization must not accumulate a
+                // partially scanned collection on a subsequent attempt.
+                $this->attributes = $previous;
+                throw $error;
             }
-            $routes = $this->finalizeRoutes($context);
             if ($context === []) {
                 $this->routes = $routes;
             }
@@ -73,11 +81,13 @@ final class AttributeRouteLocator implements RouteLocatorInterface, ClassListene
 
     public function handle(ClassInfo $info): void
     {
-        $result = Reflection::getDeepMetadata($info->reflector, Route::class);
+        if ($this->isFinalized) {
+            throw ListenerAlreadyFinalizedException::forListener($this);
+        }
 
-        if ($result !== []) {
-            foreach ($result as $target => $attributes) {
-                $this->attributes[] = [self::normalizeTarget($target), $attributes[0]];
+        foreach (Reflection::getDeepMetadata($info->reflector, Route::class) as $target => $attributes) {
+            foreach ($attributes as $attribute) {
+                $this->attributes[] = [self::normalizeTarget($target), $attribute];
             }
         }
     }
@@ -90,9 +100,7 @@ final class AttributeRouteLocator implements RouteLocatorInterface, ClassListene
     public function finalize(array $context = []): void
     {
         $routes = $this->finalizeRoutes($context);
-        if ($context === []) {
-            $this->routes = $routes;
-        }
+        $this->routes = $context === [] ? $routes : null;
     }
 
     private function finalizeRoutes(array $context): Routes
@@ -130,15 +138,16 @@ final class AttributeRouteLocator implements RouteLocatorInterface, ClassListene
 
             $fingerprint = $record->toArray();
 
-            if (isset($seen[$record->name])) {
-                if ($seen[$record->name] === $fingerprint) {
+            $name = $record->group === null ? $record->name : $record->group . '.' . $record->name;
+            if (isset($seen[$name])) {
+                if ($seen[$name] === $fingerprint) {
                     continue;
                 }
 
-                throw new RouteAlreadyExistsException($record->name);
+                throw new RouteAlreadyExistsException($name);
             }
 
-            $seen[$record->name] = $fingerprint;
+            $seen[$name] = $fingerprint;
             $routes->addRoute($record);
         }
         return $routes;

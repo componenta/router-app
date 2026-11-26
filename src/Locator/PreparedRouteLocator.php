@@ -14,6 +14,7 @@ use Componenta\Http\Router\Contract\RouteLocatorInterface;
 final class PreparedRouteLocator implements RouteLocatorInterface
 {
     private ?CompiledRoutes $routes = null;
+    private bool $checked = false;
 
     /** @param Closure(): RouteLocatorInterface $source */
     public function __construct(
@@ -28,7 +29,11 @@ final class PreparedRouteLocator implements RouteLocatorInterface
             return ($this->source)()->getRoutes($context);
         }
 
-        $this->routes ??= CompiledRoutes::tryFromArray(PhpMapFile::read($this->file, $this->generation));
+        // Select prepared or source mode once for this application runtime.
+        if (!$this->checked) {
+            $this->routes = CompiledRoutes::tryFromArray(PhpMapFile::read($this->file, $this->generation));
+            $this->checked = true;
+        }
 
         return $this->routes ?? ($this->source)()->getRoutes();
     }

@@ -55,3 +55,25 @@ it('uses only a valid route map from the selected discovery generation', functio
         PhpMapFile::remove($file);
     }
 });
+
+
+it('does not switch a running application from source to prepared routing after its first resolution', function (): void {
+    $source = new Routes();
+    $source->addRoute(RouteRecord::get('home', '/', 'Controller'));
+    $locator = new class($source) implements RouteLocatorInterface {
+        public function __construct(private Routes $source) {}
+        public function getRoutes(array $context = []): RouteCollectorInterface { return $this->source; }
+    };
+    $file = tempnam(sys_get_temp_dir(), 'router_app_mode_');
+    if ($file === false) { throw new RuntimeException('Cannot create fixture.'); }
+    $generation = str_repeat('a', 32);
+    try {
+        $prepared = new PreparedRouteLocator($file, $generation, static fn () => $locator);
+        expect($prepared->getRoutes())->toBe($source);
+        PhpMapFile::write($file, (new RouteCacheGenerator())->compile($source), $generation);
+        expect($prepared->getRoutes())->toBe($source)
+            ->and((new PreparedRouteLocator($file, $generation, static fn () => $locator))->getRoutes())->toBeInstanceOf(CompiledRoutes::class);
+    } finally {
+        PhpMapFile::remove($file);
+    }
+});
