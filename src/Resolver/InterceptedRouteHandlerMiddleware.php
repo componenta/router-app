@@ -29,7 +29,11 @@ final readonly class InterceptedRouteHandlerMiddleware implements MiddlewareInte
         private PipelineInterface $pipeline,
         private ?Responder $responder = null,
     ) {
-        $this->handler = $handler;
+        // A callable array may contain references to the receiver or method.
+        // Preserve the validated callable while retaining object identity.
+        $this->handler = is_array($handler)
+            ? array_map(static fn (mixed $value): mixed => $value, $handler)
+            : $handler;
     }
 
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
