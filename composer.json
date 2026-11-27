@@ -42,6 +42,7 @@
         }
     },
     "require-dev": {
+        "nyholm/psr7": "^1.8",
         "pestphp/pest": "^4.0"
     },
     "config": {

@@ -55,6 +55,13 @@ Custom route attributes, custom compilers/syntax configurations, stateful
 callables and non-exportable values keep source resolution. Source exceptions
 propagate normally.
 
+The intercepted handler resolver obtains the application's `Responder` lazily.
+Handlers and callbacks returning a PSR response, middleware or request handler
+work without configuring its HTTP factories. A result that needs normalization
+uses the registered responder, including an already lazy instance. Configuration
+and response creation errors propagate when that dependency is first used. This
+behavior is the same for source and prepared routes.
+
 ## Configuration
 
 ```php
