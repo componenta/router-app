@@ -40,11 +40,14 @@ from those inputs.
 
 ## Runtime
 
-Development and `APP_DISCOVERY_SOURCE=1` use the full source locator. Production
+By default, development and `APP_DISCOVERY_SOURCE=1` use the full source locator. Production
 reads `router.routes` from the `PreparedBuild` selected by App at bootstrap, when
 `ConfigKey::COMPILED_PIPELINE` is enabled. Missing, skipped, incompatible or
-malformed payloads use `app.discovery.source` and the configured route file.
-Explicit context supplied to `getRoutes($context)` also bypasses preparation.
+malformed optional payloads use `app.discovery.source` and the configured route file.
+If the runtime deployment policy requires `router.routes`, the locator uses the prepared map
+regardless of `APP_ENV` and rejects a missing or invalid map instead of falling back.
+Disabling preparation explicitly conflicts with that policy. Explicit context supplied to
+`getRoutes($context)` still requests source routes, without changing the normal runtime selection.
 The locator chooses prepared or source mode once for its normal runtime path.
 
 App exposes the optional selected snapshot under `App\ConfigKey::PREPARED_BUILD`;
