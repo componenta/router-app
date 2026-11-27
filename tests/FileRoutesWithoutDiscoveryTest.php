@@ -17,22 +17,23 @@ use Componenta\Http\Router\ConfigKey;
 use Componenta\Http\Router\Contract\RouteLocatorInterface;
 use Componenta\Stdlib\PathResolver;
 
-function fileRoutesWithoutDiscoveryDefinition(): ConfigDefinition
+function fileRoutesWithoutDiscoveryDefinition(bool $compiled = true): ConfigDefinition
 {
     return new ConfigDefinition(providers: [
         new \Componenta\App\ConfigProvider(),
         new \Componenta\Http\Router\ConfigProvider(),
         new \Componenta\Http\Router\App\ConfigProvider(),
-        static fn (): array => [ConfigKey::ROUTES_FILE => 'routes.php'],
+        static fn (): array => [ConfigKey::ROUTES_FILE => 'routes.php', ConfigKey::COMPILED_PIPELINE => $compiled],
     ]);
 }
 
-function fileRoutesWithoutDiscoveryContainer(string $root, string $environment = 'production'): ContainerValue
+function fileRoutesWithoutDiscoveryContainer(string $root, string $environment = 'production', array $requiredArtifacts = [], bool $compiled = true): ContainerValue
 {
     $composition = ConfigFactory::create(
         new PathResolver($root),
-        fileRoutesWithoutDiscoveryDefinition(),
+        fileRoutesWithoutDiscoveryDefinition($compiled),
         new Environment(['APP_ENV' => $environment]),
+        requiredArtifacts: $requiredArtifacts,
     );
 
     return (new ContainerFactory())->create($composition->config, $composition->dependencies);
@@ -73,7 +74,7 @@ it('prepares file routes without discovery and retains source access for explici
         new Environment(['APP_ENV' => 'production']),
         requiredArtifacts: [RouteBuilder::ARTIFACT_ID],
     );
-    $container = fileRoutesWithoutDiscoveryContainer($this->fileRoutesRoot);
+    $container = fileRoutesWithoutDiscoveryContainer($this->fileRoutesRoot, requiredArtifacts: [RouteBuilder::ARTIFACT_ID]);
     expect($container->has(AppConfigKey::PREPARED_BUILD))->toBeTrue()
         ->and($container->has(AppConfigKey::DISCOVERY_SOURCE))->toBeFalse();
     $locator = $container->get(RouteLocatorInterface::class);
@@ -89,3 +90,28 @@ it('prepares file routes without discovery and retains source access for explici
         ->and($contextual->generate($contextual, 'file', ['id' => 7]))->toBe('/custom/7')
         ->and($locator->getRoutes())->toBe($prepared);
 });
+
+it('honors required routing independently of environment and rejects explicitly disabled preparation', function (string $environment): void {
+    ApplicationBuildRunner::build(
+        new PathResolver($this->fileRoutesRoot),
+        fileRoutesWithoutDiscoveryDefinition(),
+        new Environment(['APP_ENV' => 'production']),
+        requiredArtifacts: [RouteBuilder::ARTIFACT_ID],
+    );
+    $required = [RouteBuilder::ARTIFACT_ID];
+    $container = fileRoutesWithoutDiscoveryContainer($this->fileRoutesRoot, $environment, $required);
+    $routes = $container->get(RouteLocatorInterface::class)->getRoutes();
+    expect($routes)->toBeInstanceOf(CompiledRoutes::class)
+        ->and($routes->match($routes, '/file/42', 'GET')->parameters)->toBe(['id' => 42]);
+
+    $disabled = fileRoutesWithoutDiscoveryContainer($this->fileRoutesRoot, $environment, $required, compiled: false);
+    // DI may wrap the factory error; inspect the original cause rather than its transport.
+    try {
+        $disabled->get(RouteLocatorInterface::class)->getRoutes();
+        throw new LogicException('Required routing must not silently switch to source.');
+    } catch (RuntimeException $error) {
+        while ($error->getPrevious() !== null) { $error = $error->getPrevious(); }
+        expect($error)->toBeInstanceOf(RuntimeException::class)
+            ->and($error->getMessage())->toContain('Source routing conflicts with required build artifact');
+    }
+})->with(['development', 'production']);

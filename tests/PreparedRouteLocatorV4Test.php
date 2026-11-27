@@ -69,3 +69,37 @@ it('retains the selected generation when another build is published or cleaned',
         BuildFixture::remove($root);
     }
 });
+
+it('rejects an invalid required route payload without invoking the source, including on retry', function (string $damage): void {
+    $source = (new Routes())->addRoute(RouteRecord::get('home', '/', 'Controller'));
+    $data = (new RouteCacheGenerator())->compile($source);
+    $data = match ($damage) {
+        'empty' => [],
+        'fingerprint' => array_replace($data, ['fingerprint' => 'corrupted']),
+        'format' => array_replace($data, ['version' => RouteCacheGenerator::CACHE_VERSION + 1]),
+    };
+    $root = sys_get_temp_dir() . '/router_required_map_' . bin2hex(random_bytes(8));
+    $sourceCalls = 0;
+    $factory = static function () use ($source, &$sourceCalls): RouteLocatorInterface {
+        ++$sourceCalls;
+        return new class($source) implements RouteLocatorInterface {
+            public function __construct(private Routes $source) {}
+            public function getRoutes(array $context = []): RouteCollectorInterface { return $this->source; }
+        };
+    };
+    try {
+        BuildFixture::publish($root, $data);
+        $strictStore = new \Componenta\App\Build\BuildStore($root . '/build', requiredArtifacts: [RouteBuilder::ARTIFACT_ID]);
+        $strict = new PreparedRouteLocator($strictStore->load(), $factory);
+        for ($attempt = 0; $attempt < 2; ++$attempt) {
+            expect(fn () => $strict->getRoutes())->toThrow(RuntimeException::class, 'invalid route map')
+                ->and($sourceCalls)->toBe(0);
+        }
+        $optional = new PreparedRouteLocator(BuildFixture::store($root)->load(), $factory);
+        expect($optional->getRoutes())->toBe($source)
+            ->and($optional->getRoutes())->toBe($source)
+            ->and($sourceCalls)->toBe(2);
+    } finally {
+        BuildFixture::remove($root);
+    }
+})->with(['empty', 'fingerprint', 'format']);

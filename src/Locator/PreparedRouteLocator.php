@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Componenta\Http\Router\App\Locator;
 
 use Closure;
+use RuntimeException;
 use Componenta\App\Build\PreparedBuild;
 use Componenta\Http\Router\App\Build\RouteBuilder;
 use Componenta\Http\Router\Cache\RouteCacheGenerator;
@@ -35,6 +36,9 @@ final class PreparedRouteLocator implements RouteLocatorInterface
             $this->routes = CompiledRoutes::tryFromArray(
                 $this->prepared->read(RouteBuilder::ARTIFACT_ID, RouteCacheGenerator::CACHE_VERSION),
             );
+            if ($this->routes === null && $this->prepared->isRequired(RouteBuilder::ARTIFACT_ID)) {
+                throw new RuntimeException(sprintf('Required build artifact "%s" contains an invalid route map.', RouteBuilder::ARTIFACT_ID));
+            }
             $this->checked = true;
         }
 
