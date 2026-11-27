@@ -202,3 +202,39 @@ it('selects exactly one intercepted route resolver and executes it in the compos
         ->and($resolved->process($request, $next))->toBe($response)
         ->and($interceptor->calls)->toBe(1);
 });
+
+
+it('keeps the selected callable across intercepted requests despite changes to caller references', function (): void {
+    $expected = $this->createStub(ResponseInterface::class);
+    $alternative = $this->createStub(ResponseInterface::class);
+    $controller = new class($expected, $alternative) {
+        public function __construct(private ResponseInterface $first, private ResponseInterface $second) {}
+        public function show(): ResponseInterface { return $this->first; }
+        public function delete(): ResponseInterface { return $this->second; }
+    };
+    $original = $controller;
+    $method = 'show';
+    $pipeline = $this->createMock(PipelineInterface::class);
+    $pipeline->expects($this->exactly(4))->method('handle')->willReturnCallback(
+        static function (CallableContextInterface $context) use ($original): ResponseInterface {
+            expect($context->getCallable())->toBe([$original, 'show'])
+                ->and($context->getAttribute(CallableContextInterface::SCOPE_ATTRIBUTE))->toBe(\Componenta\Interceptor\Scope::HTTP);
+            return ($context->getCallable())();
+        },
+    );
+    $middleware = new \Componenta\Http\Router\App\Resolver\InterceptedRouteHandlerMiddleware([&$controller, &$method], $pipeline);
+    $request = $this->createStub(ServerRequestInterface::class);
+    $next = $this->createMock(RequestHandlerInterface::class);
+    $next->expects($this->never())->method('handle');
+    expect($middleware->process($request, $next))->toBe($expected);
+    $method = 'delete';
+    expect($middleware->process($request, $next))->toBe($expected);
+    $method = 'show';
+    $controller = new class($alternative) {
+        public function __construct(private ResponseInterface $response) {}
+        public function show(): ResponseInterface { return $this->response; }
+    };
+    expect($middleware->process($request, $next))->toBe($expected);
+    $method = 'missing';
+    expect($middleware->process($request, $next))->toBe($expected);
+});
