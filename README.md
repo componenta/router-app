@@ -12,6 +12,10 @@ Register both `Componenta\Http\Router\ConfigProvider` and
 attribute extraction logic. It receives the shared `app.discovery.source`
 iterator through DI and reads it when routes are requested.
 
+When application discovery is disabled, the locator loads the configured route
+file without a class iterator. File-only routing supports the same build,
+prepared-runtime and explicit-context source paths.
+
 `RouteBuilder` implements `ApplicationBuilderInterface` and is registered in
 `app.builders`. Run the ordinary `app:build` command to write its artifact.
 Resolving the command or displaying help does not create the builder or scan

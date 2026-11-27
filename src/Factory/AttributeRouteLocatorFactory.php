@@ -18,7 +18,9 @@ final readonly class AttributeRouteLocatorFactory
         return new AttributeRouteLocator(
             new RouteLocator($paths->resolve($container->config->string(ConfigKey::ROUTES_FILE)),
                 $container->get(CompilerInterface::class, CompilerInterface::class), useCache: false),
-            $container->get(AppConfigKey::DISCOVERY_SOURCE, ClassIteratorInterface::class),
+            $container->has(AppConfigKey::DISCOVERY_SOURCE)
+                ? $container->get(AppConfigKey::DISCOVERY_SOURCE, ClassIteratorInterface::class)
+                : null,
         );
     }
 }
