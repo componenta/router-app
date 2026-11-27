@@ -30,19 +30,17 @@ final class RouteBuildIntegrationTest extends TestCase
         file_put_contents($this->root . '/routes.php', '<?php $routes->addRoute(\\Componenta\\Http\\Router\\RouteRecord::get("file", "/file", "FileHandler"));');
     }
     protected function tearDown(): void {
-        foreach (glob($this->root . '/*') as $file) { unlink($file); }
-        rmdir($this->root);
+        BuildFixture::remove($this->root);
     }
     private function container(string $mode, array $extra = []): \Componenta\Config\ContainerValue {
         $composition = (new ConfigFactory())->create(new Environment(['APP_ENV' => $mode]),
             new \Componenta\App\ConfigProvider(), new \Componenta\App\Console\ConfigProvider(),
             new \Componenta\Http\Router\ConfigProvider(), new \Componenta\Http\Router\App\ConfigProvider(),
+            BuildFixture::provider($this->root),
             fn (): array => $extra + [
                 ConfigKey::ROUTES_FILE => 'routes.php', ConfigKey::ROUTES_CACHE_FILE => 'optimized.php',
                 DIConfigKey::DEPENDENCIES => [DIConfigKey::SERVICES => [
                     PathResolverInterface::class => new PathResolver($this->root),
-                    \Componenta\App\ConfigKey::BUILD_GENERATION => str_repeat('a', 32),
-                    \Componenta\App\ConfigKey::DISCOVERY_GENERATION => str_repeat('a', 32),
                     \Componenta\App\ConfigKey::DISCOVERY_SOURCE => new ClassIterator([new ClassInfo(BuiltRouteAction::class)]),
                     \Componenta\ClassFinder\ClassIteratorInterface::class => new ClassIterator([new ClassInfo(BuiltRouteAction::class)]),
                 ]],
@@ -88,8 +86,7 @@ for ($index = 0; $index < ' . $count . '; ++$index) {
     public function testInvalidCachedRegexFallsBackUnderTheApplicationErrorHandler(string $section): void
     {
         $this->container('production')->get(ApplicationBuildOrchestrator::class)->build();
-        $file = $this->root . '/optimized.php';
-        $cache = \Componenta\App\Build\PhpMapFile::read($file, str_repeat('a', 32));
+        $cache = BuildFixture::read($this->root);
         self::assertIsArray($cache);
         self::assertArrayHasKey('dynamicIndex', $cache);
         if ($section === 'integrity') {
@@ -102,7 +99,7 @@ for ($index = 0; $index < ' . $count . '; ++$index) {
             unset($cache['fingerprint']);
             $cache['fingerprint'] = hash('xxh128', serialize($cache));
         }
-        \Componenta\App\Build\PhpMapFile::write($file, $cache, str_repeat('a', 32));
+        BuildFixture::publish($this->root, $cache);
 
         set_error_handler(static function (int $level, string $message, string $file, int $line): never {
             throw new \ErrorException($message, 0, $level, $file, $line);
@@ -208,15 +205,14 @@ for ($index = 0; $index < ' . $count . '; ++$index) {
         self::assertInstanceOf(CompiledRoutes::class, $built);
         $assertRoutes($built);
 
-        $file = $this->root . '/optimized.php';
-        $cache = \Componenta\App\Build\PhpMapFile::read($file, str_repeat('a', 32));
+        $cache = BuildFixture::read($this->root);
         self::assertIsArray($cache);
         if ($global) {
             $cache[$field] = $value;
         } else {
             $cache['routeData']['attribute'][$field] = $value;
         }
-        \Componenta\App\Build\PhpMapFile::write($file, $cache, str_repeat('a', 32));
+        BuildFixture::publish($this->root, $cache);
         set_error_handler(static function (int $level, string $message, string $file, int $line): never {
             throw new \ErrorException($message, 0, $level, $file, $line);
         });
@@ -243,7 +239,7 @@ for ($index = 0; $index < ' . $count . '; ++$index) {
     public function testBuildAndFallbackKeepFileAndAttributeRoutes(): void {
         $builder = $this->container('production');
         self::assertSame(0, (new \Symfony\Component\Console\Tester\CommandTester($builder->get(BuildCommand::class)))->execute([]));
-        self::assertFileExists($this->root . '/optimized.php');
+        self::assertNotNull(BuildFixture::store($this->root)->load());
         $built = $this->container('production')->get(RouteLocatorInterface::class)->getRoutes();
         self::assertInstanceOf(CompiledRoutes::class, $built);
         foreach (['development', 'production'] as $mode) {
@@ -252,25 +248,23 @@ for ($index = 0; $index < ' . $count . '; ++$index) {
             self::assertSame(['id' => 12], $routes->match($routes, '/attribute/12', 'GET')->parameters);
             self::assertSame('/attribute/12', $routes->generate($routes, 'attribute', ['id' => 12]));
         }
-        foreach ([
-            null,
-            '<?php return "invalid";',
-            '<?php return [;',
-            '<?php return \\MissingRouteCacheEnum::Default;',
-            '<?php throw new \\RuntimeException("Unreadable cache");',
-            '<?php trigger_error("Invalid cached value", E_USER_WARNING); return [];',
-        ] as $content) {
-            if ($content === null) { unlink($this->root . '/optimized.php'); }
-            else { file_put_contents($this->root . '/optimized.php', $content); }
+        foreach ([null, [], ['version' => -1]] as $content) {
+            if ($content === null) { BuildFixture::store($this->root)->clean(); }
+            else { BuildFixture::publish($this->root, $content); }
             $routes = $this->container('production')->get(RouteLocatorInterface::class)->getRoutes();
+            self::assertNotInstanceOf(CompiledRoutes::class, $routes);
             self::assertSame(['file', 'attribute'], array_keys($routes->toArray()));
         }
     }
-    public function testBuildDiscardsAnEarlierMapWhenAStatefulHandlerCannotBeExported(): void {
-        $this->container('production')->get(ApplicationBuildOrchestrator::class)->build();
+    public function testBuildReportsSkippedPreparationWithoutReusingThePreviousRouteArtifact(): void {
+        $previous = $this->container('production')->get(ApplicationBuildOrchestrator::class)->build();
         file_put_contents($this->root . '/routes.php',
             '<?php $routes->addRoute(\\Componenta\\Http\\Router\\RouteRecord::get("stateful", "/stateful", static function () { static $count = 0; return ++$count; }));');
-        $this->container('production')->get(ApplicationBuildOrchestrator::class)->build();
+        $current = $this->container('production')->get(ApplicationBuildOrchestrator::class)->build();
+        self::assertNotSame($previous->generation, $current->generation);
+        self::assertNull($current->read(\Componenta\Http\Router\App\Build\RouteBuilder::ARTIFACT_ID, \Componenta\Http\Router\Cache\RouteCacheGenerator::CACHE_VERSION));
+        self::assertStringContainsString('unsupported', $current->skipped()[\Componenta\Http\Router\App\Build\RouteBuilder::ARTIFACT_ID]);
+        self::assertNotNull($previous->read(\Componenta\Http\Router\App\Build\RouteBuilder::ARTIFACT_ID, \Componenta\Http\Router\Cache\RouteCacheGenerator::CACHE_VERSION));
         foreach (['development', 'production'] as $mode) {
             $locator = $this->container($mode)->get(RouteLocatorInterface::class);
             $routes = $locator->getRoutes();
@@ -299,14 +293,13 @@ PHP);
             self::assertSame('/items/23', $routes->generate($routes, 'marked', ['MARK' => 23]));
         }
 
-        $file = $this->root . '/optimized.php';
-        $cache = \Componenta\App\Build\PhpMapFile::read($file, str_repeat('a', 32));
+        $cache = BuildFixture::read($this->root);
         self::assertIsArray($cache);
         $cache['version'] = 4;
         $cache['regex'] = ['GET' => '#^(?:/items/(?P<MARK>[^/]+)(*MARK:r0)|/attribute/(?P<id>[^/]+)(*MARK:r1))$#J'];
         $cache['routeMap'] = ['GET' => ['r0' => 'marked', 'r1' => 'attribute']];
         unset($cache['dynamicIndex']);
-        \Componenta\App\Build\PhpMapFile::write($file, $cache, str_repeat('a', 32));
+        BuildFixture::publish($this->root, $cache);
         $routes = $this->container('production')->get(RouteLocatorInterface::class)->getRoutes();
         self::assertSame(['MARK' => 17], $routes->match($routes, '/items/17', 'GET')->parameters);
         self::assertSame(['id' => 42], $routes->match($routes, '/attribute/42', 'GET')->parameters);

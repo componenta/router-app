@@ -39,14 +39,13 @@ final class CustomGenerationSyntaxTest extends TestCase
                     new \Componenta\App\Console\ConfigProvider(),
                     new \Componenta\Http\Router\ConfigProvider(),
                     new \Componenta\Http\Router\App\ConfigProvider(),
+                    BuildFixture::provider($root),
                     static fn (): array => [
                         \Componenta\Http\Router\ConfigKey::ROUTES_FILE => 'routes.php',
                         \Componenta\Http\Router\ConfigKey::ROUTES_CACHE_FILE => 'cache.php',
                         \Componenta\Config\ConfigKey::DEPENDENCIES => [
                             \Componenta\Config\ConfigKey::SERVICES => [
                                 \Componenta\Stdlib\PathResolverInterface::class => new \Componenta\Stdlib\PathResolver($root),
-                                \Componenta\App\ConfigKey::BUILD_GENERATION => str_repeat('a', 32),
-                                \Componenta\App\ConfigKey::DISCOVERY_GENERATION => str_repeat('a', 32),
                                 \Componenta\App\ConfigKey::DISCOVERY_SOURCE => new \Componenta\ClassFinder\ClassIterator([]),
                             ],
                         ],
@@ -63,8 +62,7 @@ final class CustomGenerationSyntaxTest extends TestCase
             $after = $container('production')->get(\Componenta\Http\Router\Contract\RouteLocatorInterface::class)->getRoutes();
             self::assertSame('/mounted/users/42', $after->generate($after, 'users', ['id' => 42]));
         } finally {
-            foreach (glob($root . '/*') as $file) { unlink($file); }
-            rmdir($root);
+            BuildFixture::remove($root);
         }
     }
 }

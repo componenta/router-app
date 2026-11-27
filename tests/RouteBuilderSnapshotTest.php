@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Componenta\App\Build\PhpMapFile;
+use Componenta\Http\Router\App\Tests\BuildFixture;
 use Componenta\ClassFinder\ClassIterator;
 use Componenta\Http\Router\App\Build\RouteBuilder;
 use Componenta\Http\Router\App\Locator\AttributeRouteLocator;
@@ -15,30 +15,29 @@ it('rebuilds current file routes without replacing an existing runtime snapshot'
     $root = sys_get_temp_dir() . '/router-rebuild-' . bin2hex(random_bytes(8));
     mkdir($root);
     $file = $root . '/routes.php';
-    $map = $root . '/map.php';
-    $generation = str_repeat('a', 32);
     $source = new AttributeRouteLocator(new RouteLocator($file, useCache: false), new ClassIterator([]));
-    $builder = new RouteBuilder($source, $map, new RouteCacheGenerator(), $generation);
+    $builder = new RouteBuilder($source, new RouteCacheGenerator());
     try {
         file_put_contents($file, '<?php $routes->addRoute(\Componenta\Http\Router\RouteRecord::get("item", "/old", "Handler"));');
         $runtime = $source->getRoutes();
-        $builder->build();
-        expect(CompiledRoutes::fromArray(PhpMapFile::read($map, $generation))->getRoute('item')->path)->toBe('/old');
+        BuildFixture::build($root, $builder);
+        expect(CompiledRoutes::fromArray(BuildFixture::read($root))->getRoute('item')->path)->toBe('/old');
 
         file_put_contents($file, '<?php $routes->addRoute(\Componenta\Http\Router\RouteRecord::get("item", "/new", "Handler"));');
-        $builder->build();
-        expect(CompiledRoutes::fromArray(PhpMapFile::read($map, $generation))->getRoute('item')->path)->toBe('/new')
+        BuildFixture::build($root, $builder);
+        expect(CompiledRoutes::fromArray(BuildFixture::read($root))->getRoute('item')->path)->toBe('/new')
             ->and($source->getRoutes())->toBe($runtime)
             ->and($runtime->getRoute('item')->path)->toBe('/old');
-        $builder->clean();
-        $builder->build();
-        expect(CompiledRoutes::fromArray(PhpMapFile::read($map, $generation))->getRoute('item')->path)->toBe('/new');
+        BuildFixture::store($root)->clean();
+        BuildFixture::build($root, $builder);
+        expect(CompiledRoutes::fromArray(BuildFixture::read($root))->getRoute('item')->path)->toBe('/new');
 
         file_put_contents($file, '<?php $routes->addRoute(\Componenta\Http\Router\RouteRecord::get("item", "/new", "Handler")); $routes->addRoute(\Componenta\Http\Router\RouteRecord::get("conflict", "/new", "Other"));');
-        expect(fn () => $builder->build())->toThrow(RouteConflictException::class);
+        $previous = BuildFixture::store($root)->load();
+        expect(fn () => BuildFixture::build($root, $builder))->toThrow(RouteConflictException::class);
+        expect(BuildFixture::store($root)->load()?->generation)->toBe($previous?->generation);
     } finally {
-        foreach ([$file, $map] as $path) { if (is_file($path)) { unlink($path); } }
-        rmdir($root);
+        BuildFixture::remove($root);
     }
 });
 
@@ -46,8 +45,6 @@ it('prepares built-in generation syntaxes through the same router preparation co
     $root = sys_get_temp_dir() . '/router-built-in-' . bin2hex(random_bytes(8));
     mkdir($root);
     $file = $root . '/routes.php';
-    $map = $root . '/map.php';
-    $generation = str_repeat('b', 32);
     try {
         file_put_contents($file, <<<'PHP'
 <?php
@@ -55,12 +52,11 @@ $routes = new \Componenta\Http\Router\Routes(syntax: new \Componenta\Http\Router
 $routes->addRoute(\Componenta\Http\Router\RouteRecord::get('item', '/items/[id]', 'Handler'));
 PHP);
         $source = new AttributeRouteLocator(new RouteLocator($file, useCache: false), new ClassIterator([]));
-        (new RouteBuilder($source, $map, new RouteCacheGenerator(), $generation))->build();
-        $cached = CompiledRoutes::fromArray(PhpMapFile::read($map, $generation));
+        BuildFixture::build($root, new RouteBuilder($source, new RouteCacheGenerator()));
+        $cached = CompiledRoutes::fromArray(BuildFixture::read($root));
         expect($cached->generate($cached, 'item', ['id' => 42]))->toBe('/items/42')
             ->and($cached->match($cached, '/items/42', 'GET')->parameters)->toBe(['id' => 42]);
     } finally {
-        foreach ([$file, $map] as $path) { if (is_file($path)) { unlink($path); } }
-        rmdir($root);
+        BuildFixture::remove($root);
     }
 });

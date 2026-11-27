@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Componenta\Http\Router\App\Tests\BuildFixture;
+
 use Componenta\App\Console\Command\BuildCommand;
 use Componenta\ClassFinder\ClassIterator;
 use Componenta\Config\ConfigFactory;
@@ -34,14 +36,13 @@ PHP);
         $container = static function (string $mode, bool $optimized = true, bool $forceSource = false) use ($root): ContainerValue {
             $providers = [new \Componenta\App\ConfigProvider(), new \Componenta\App\Console\ConfigProvider(),
                 new \Componenta\Http\Router\ConfigProvider(), new \Componenta\Http\Router\App\ConfigProvider()];
+            $providers[] = BuildFixture::provider($root, $forceSource);
             $providers[] = static fn (): array => [
                 ConfigKey::ROUTES_FILE => 'routes.php',
                 ConfigKey::ROUTES_CACHE_FILE => 'optimized.php',
                 ConfigKey::COMPILED_PIPELINE => $optimized,
                 \Componenta\Config\ConfigKey::DEPENDENCIES => [\Componenta\Config\ConfigKey::SERVICES => [
                     PathResolverInterface::class => new PathResolver($root),
-                    \Componenta\App\ConfigKey::BUILD_GENERATION => str_repeat('a', 32),
-                    \Componenta\App\ConfigKey::DISCOVERY_GENERATION => str_repeat('a', 32),
                     \Componenta\App\ConfigKey::DISCOVERY_SOURCE => new ClassIterator([new ClassInfo(RouteBuildSnapshotAction::class)]),
                     \Componenta\ClassFinder\ClassIteratorInterface::class => new ClassIterator([new ClassInfo(RouteBuildSnapshotAction::class)]),
                 ]],
@@ -61,7 +62,7 @@ PHP);
         foreach (['/initial', '/updated'] as $prefix) {
             file_put_contents($root . '/prefix.txt', $prefix);
             expect((new CommandTester($container('production')->get(BuildCommand::class)))->execute([]))->toBe(0)
-                ->and(is_file($root . '/optimized.php'))->toBeTrue();
+                ->and(BuildFixture::store($root)->load() !== null)->toBeTrue();
             $built = $container('production')->get(RouteLocatorInterface::class)->getRoutes();
             expect($built)->toBeInstanceOf(CompiledRoutes::class);
             $assertRoutes($built, $prefix);
@@ -74,10 +75,7 @@ PHP);
         expect($recovery)->not->toBeInstanceOf(CompiledRoutes::class);
         $assertRoutes($recovery, '/recovery');
     } finally {
-        foreach (['routes.php', 'prefix.txt', 'optimized.php'] as $file) {
-            if (is_file($root . '/' . $file)) { unlink($root . '/' . $file); }
-        }
-        rmdir($root);
+        BuildFixture::remove($root);
     }
 });
 
@@ -89,13 +87,12 @@ it('uses the shared discovery source for runtime fallback and the next build', f
     $create = static function () use ($root, &$sourceRequests): ContainerValue {
         $composition = (new ConfigFactory())->create(new Environment(['APP_ENV' => 'production']),
             new \Componenta\Http\Router\ConfigProvider(), new \Componenta\Http\Router\App\ConfigProvider(),
+            BuildFixture::provider($root),
             static function () use ($root, &$sourceRequests): array {
                 return [ConfigKey::ROUTES_FILE => 'routes.php', ConfigKey::ROUTES_CACHE_FILE => 'routes.cache.php',
                     \Componenta\Config\ConfigKey::DEPENDENCIES => [
                         \Componenta\Config\ConfigKey::SERVICES => [
                             PathResolverInterface::class => new PathResolver($root),
-                            \Componenta\App\ConfigKey::BUILD_GENERATION => str_repeat('a', 32),
-                            \Componenta\App\ConfigKey::DISCOVERY_GENERATION => str_repeat('a', 32),
                             \Componenta\ClassFinder\ClassIteratorInterface::class => new ClassIterator([]),
                         ],
                         \Componenta\Config\ConfigKey::FACTORIES => [
@@ -113,16 +110,13 @@ it('uses the shared discovery source for runtime fallback and the next build', f
         $container = $create();
         expect(array_keys($container->get(RouteLocatorInterface::class)->getRoutes()->toArray()))
             ->toBe(['file', 'attribute'])->and($sourceRequests)->toBe(1);
-        $container->get(\Componenta\Http\Router\App\Build\RouteBuilder::class)->build();
+        BuildFixture::build($root, $container->get(\Componenta\Http\Router\App\Build\RouteBuilder::class));
         expect($sourceRequests)->toBe(1);
         $routes = $create()->get(RouteLocatorInterface::class)->getRoutes();
         expect($routes)->toBeInstanceOf(CompiledRoutes::class)
             ->and(array_keys($routes->toArray()))->toBe(['file', 'attribute'])
             ->and($sourceRequests)->toBe(1);
     } finally {
-        foreach (['routes.php', 'routes.cache.php'] as $file) {
-            if (is_file($root . '/' . $file)) { unlink($root . '/' . $file); }
-        }
-        rmdir($root);
+        BuildFixture::remove($root);
     }
 });

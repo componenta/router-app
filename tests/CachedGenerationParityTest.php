@@ -44,13 +44,12 @@ final class CachedGenerationParityTest extends TestCase
                     new \Componenta\App\Console\ConfigProvider(),
                     new \Componenta\Http\Router\ConfigProvider(),
                     new \Componenta\Http\Router\App\ConfigProvider(),
+                    BuildFixture::provider($root),
                     static fn (): array => [
                         ConfigKey::ROUTES_FILE => 'routes.php',
                         ConfigKey::ROUTES_CACHE_FILE => 'routes.cache.php',
                         DependencyKey::DEPENDENCIES => [DependencyKey::SERVICES => [
                             PathResolverInterface::class => new PathResolver($root),
-                            \Componenta\App\ConfigKey::BUILD_GENERATION => str_repeat('a', 32),
-                            \Componenta\App\ConfigKey::DISCOVERY_GENERATION => str_repeat('a', 32),
                             \Componenta\App\ConfigKey::DISCOVERY_SOURCE => new ClassIterator([]),
                         ]],
                     ],
@@ -69,10 +68,7 @@ final class CachedGenerationParityTest extends TestCase
             self::assertSame(['id' => 42], $optimized->match($optimized, $expected, 'GET')->parameters);
             self::assertSame($expected, $optimized->generate($optimized, 'image', ['id' => 42]));
         } finally {
-            foreach (glob($root . '/*') as $file) {
-                unlink($file);
-            }
-            rmdir($root);
+            BuildFixture::remove($root);
         }
     }
 }

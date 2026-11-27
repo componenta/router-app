@@ -190,7 +190,7 @@ it('selects exactly one intercepted route resolver and executes it in the compos
 
     $resolved = $container->get(\Componenta\Http\Middleware\MiddlewareFactory::class)->createMiddleware(
         new \Componenta\Http\Router\RouteHandler(
-            static function (ServerRequestInterface $actual) use ($request, $response): ResponseInterface {
+            static function (#[\Componenta\DI\Attribute\CurrentRequest] ServerRequestInterface $actual) use ($request, $response): ResponseInterface {
                 if ($actual !== $request) {
                     throw new LogicException('Route handler did not receive the current request.');
                 }
