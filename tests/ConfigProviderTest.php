@@ -31,6 +31,11 @@ use Componenta\Interceptor\ContextHandlerInterface;
 use Componenta\Interceptor\InterceptorInterface;
 use Componenta\Interceptor\PipelineInterface;
 use Psr\Container\ContainerInterface;
+use Psr\Http\Message\ResponseFactoryInterface;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Message\StreamFactoryInterface;
+use Psr\Http\Server\RequestHandlerInterface;
 
 final readonly class RouterAppFactoryTestContainer implements ContainerInterface
 {
@@ -68,24 +73,6 @@ final class RouterAppFactoryCallableExecutor implements CallableExecutorInterfac
     public function call(mixed $callable, array $params = []): mixed
     {
         return $this->resolve($callable)(...$params);
-    }
-}
-
-final readonly class RouterAppFactoryPipeline implements PipelineInterface
-{
-    public function pipe(InterceptorInterface ...$interceptor): PipelineInterface
-    {
-        return $this;
-    }
-
-    public function handle(CallableContextInterface $context): mixed
-    {
-        return null;
-    }
-
-    public function intercept(CallableContextInterface $context, ContextHandlerInterface $handler): mixed
-    {
-        return $handler->handle($context);
     }
 }
 
@@ -128,7 +115,7 @@ describe('router app ConfigProvider', function () {
     it('builds the intercepted route handler resolver from the interceptor pipeline service', function () {
         $resolver = (new InterceptedRouteHandlerResolverFactory())(new RouterAppFactoryTestContainer([
             CallableExecutorInterface::class => new RouterAppFactoryCallableExecutor(),
-            PipelineInterface::class => new RouterAppFactoryPipeline(),
+            PipelineInterface::class => $this->createStub(PipelineInterface::class),
         ]));
 
         expect($resolver)->toBeInstanceOf(InterceptedRouteHandlerResolver::class);
@@ -158,16 +145,30 @@ describe('router app ConfigProvider', function () {
 });
 
 
-it('selects exactly one intercepted route resolver in the composed middleware chain', function (): void {
+it('selects exactly one intercepted route resolver and executes it in the composed middleware chain', function (): void {
+    $interceptor = new class implements InterceptorInterface {
+        public int $calls = 0;
+
+        public function intercept(CallableContextInterface $context, ContextHandlerInterface $handler): mixed
+        {
+            ++$this->calls;
+            return $handler->handle($context);
+        }
+    };
+    $responseFactory = $this->createStub(ResponseFactoryInterface::class);
+    $streamFactory = $this->createStub(StreamFactoryInterface::class);
     $composition = (new \Componenta\Config\ConfigFactory())->create(
         new \Componenta\Config\Environment([]),
         new \Componenta\Http\Middleware\ConfigProvider(),
+        new \Componenta\Http\ResponderConfigProvider(),
+        new \Componenta\Interceptor\ConfigProvider(),
         new \Componenta\Http\Router\ConfigProvider(),
         new ConfigProvider(),
         static fn (): array => [
+            \Componenta\Interceptor\ConfigKey::HTTP_INTERCEPTORS => [$interceptor],
             DependencyConfigKey::DEPENDENCIES => [DependencyConfigKey::SERVICES => [
-                CallableExecutorInterface::class => new RouterAppFactoryCallableExecutor(),
-                PipelineInterface::class => new RouterAppFactoryPipeline(),
+                ResponseFactoryInterface::class => $responseFactory,
+                StreamFactoryInterface::class => $streamFactory,
             ]],
         ],
     );
@@ -175,9 +176,29 @@ it('selects exactly one intercepted route resolver in the composed middleware ch
         ->and($composition->dependencies->sections[DependencyConfigKey::ALIASES][RouterConfigKey::HANDLER_RESOLVER])
         ->toBe(InterceptedRouteHandlerResolver::class);
 
+    // CallableExecutorInterface belongs to DI's protected core services.
+    // Use the actual container and interceptor provider instead of binding
+    // a conflicting executor or a stub of the older pipeline contract.
     $container = (new \Componenta\DI\ContainerFactory())->create($composition->config, $composition->dependencies);
+    expect($container->get(CallableExecutorInterface::class))->toBeInstanceOf(CallableExecutorInterface::class)
+        ->and($container->get(PipelineInterface::class))->toBeInstanceOf(PipelineInterface::class);
+
+    $request = $this->createStub(ServerRequestInterface::class);
+    $response = $this->createStub(ResponseInterface::class);
+    $next = $this->createMock(RequestHandlerInterface::class);
+    $next->expects($this->never())->method('handle');
+
     $resolved = $container->get(\Componenta\Http\Middleware\MiddlewareFactory::class)->createMiddleware(
-        new \Componenta\Http\Router\RouteHandler(static fn () => null),
+        new \Componenta\Http\Router\RouteHandler(
+            static function (ServerRequestInterface $actual) use ($request, $response): ResponseInterface {
+                if ($actual !== $request) {
+                    throw new LogicException('Route handler did not receive the current request.');
+                }
+                return $response;
+            },
+        ),
     );
-    expect($resolved)->toBeInstanceOf(\Componenta\Http\Router\App\Resolver\InterceptedRouteHandlerMiddleware::class);
+    expect($resolved)->toBeInstanceOf(\Componenta\Http\Router\App\Resolver\InterceptedRouteHandlerMiddleware::class)
+        ->and($resolved->process($request, $next))->toBe($response)
+        ->and($interceptor->calls)->toBe(1);
 });
